@@ -41,6 +41,7 @@ function renderLobby() {
     <p>Welcome, <strong>${window.playerName}</strong></p>
     <h3>Connected Players:</h3>
     <ul id="user-list"></ul>
+    <p id="countdown"></p>
     <button id="start-game">Start Game</button>
   `;
 
@@ -48,11 +49,39 @@ function renderLobby() {
     window.location.hash = '#play';
   };
 
+  let countdownStarted = false;
+  let countdownTimer;
+
   onUserListUpdate(users => {
     const ul = document.getElementById('user-list');
     ul.innerHTML = users.map(u => `<li>${u}</li>`).join('');
+
+    const countdownEl = document.getElementById('countdown');
+
+    if (users.length >= 2 && !countdownStarted) {
+      countdownStarted = true;
+      let seconds = 5;
+      countdownEl.textContent = `Game starting in ${seconds}...`;
+
+      countdownTimer = setInterval(() => {
+        seconds--;
+        countdownEl.textContent = `Game starting in ${seconds}...`;
+        if (seconds <= 0) {
+          clearInterval(countdownTimer);
+          window.location.hash = '#play';
+        }
+      }, 1000);
+    }
+
+    // Reset if players drop below 2
+    if (users.length < 2 && countdownStarted) {
+      countdownStarted = false;
+      clearInterval(countdownTimer);
+      countdownEl.textContent = '';
+    }
   });
 }
+
 
 function renderPlay() {
   app.innerHTML = `<div id="game-root"></div>`;

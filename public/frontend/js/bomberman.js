@@ -1,50 +1,98 @@
+import {
+  sendMovement,
+  onOtherPlayerMove,
+  onExistingPlayers,
+  getClientId
+} from './wsConnect.js';
+
+import { requestMap, onMapData } from './wsConnect.js';
+
 export const variables = {
-    container: document.getElementById('game-root'),
-    score: 0,
-    level: 0,
-    lives: 3,
-    isGameOver: false,
-    direction: "down",
-    bomberElement: document.getElementById('bomber'),
-    wallElements: [],
-    bombElements: [],
-    fireElements: [],
-    bombs: [],
-    fires: [],
-    images: {
-        fixed: "frontend/img/solid.png",
-        random: "frontend/img/block.png"
-    },
-    bomber: {
-        x: 1, 
-        y: 1, 
-        size: 40,
-        speed: 1,
-        movingUp: false,
-        movingDown: false,
-        movingLeft: false,
-        movingRight: false
-    },
-    mapWidth: 15,
-    mapHeight: 13,
-    gridSize: 40, 
-    walls: [],
-    cameraOffsetX: 0,
-    cameraOffsetY: 0
+  remotePlayers: {},
+  container: document.getElementById('game-root'),
+  score: 0,
+  level: 0,
+  lives: 3,
+  isGameOver: false,
+  direction: "down",
+  bomberElement: document.getElementById('bomber'),
+  wallElements: [],
+  bombElements: [],
+  fireElements: [],
+  bombs: [],
+  fires: [],
+  images: {
+    fixed: "frontend/img/solid.png",
+    random: "frontend/img/block.png"
+  },
+  bomber: {
+    x: 1,
+    y: 1,
+    size: 40,
+    speed: 1,
+    movingUp: false,
+    movingDown: false,
+    movingLeft: false,
+    movingRight: false
+  },
+  mapWidth: 15,
+  mapHeight: 13,
+  gridSize: 40,
+  walls: [],
+  cameraOffsetX: 0,
+  cameraOffsetY: 0
 };
-
-
-function gameLoop() {
-    update();
-    requestAnimationFrame(gameLoop);
-}
 
 export function startGame(container) {
   variables.container = container;
-  generateMap();
-  drawWalls();
+
+  requestMap();
+
+  onMapData(grid => {
+    variables.grid = grid;
+    drawWalls();
+  });
+
+  sendMovement(variables.bomber.x, variables.bomber.y); 
+
+  onOtherPlayerMove(renderRemotePlayer);
+
+  onExistingPlayers(players => {
+    players.forEach(renderRemotePlayer);
+  });
+
   gameLoop();
-} 
+}
+
+function gameLoop() {
+  update();
+  requestAnimationFrame(gameLoop);
+}
+
+function renderRemotePlayer({ id, x, y }) {
+  if (id === getClientId()) return;
+
+  if (!variables.remotePlayers[id]) {
+    const el = document.createElement('div');
+    el.className = 'remote-player';
+    el.style.position = 'absolute';
+    el.style.width = variables.gridSize + 'px';
+    el.style.height = variables.gridSize + 'px';
+    el.style.backgroundImage = "url('frontend/img/bomber.png')";
+    el.style.backgroundSize = 'contain';
+    el.style.zIndex = 1;
+    variables.container.appendChild(el);
+
+    variables.remotePlayers[id] = { x, y, element: el };
+  }
+
+  const player = variables.remotePlayers[id];
+  player.x = x;
+  player.y = y;
+  player.element.style.left = `${x * variables.gridSize}px`;
+  player.element.style.top = `${y * variables.gridSize}px`;
+}
+
 
 export function update() {
     const { bomber, bomberElement, gridSize } = variables;
@@ -64,6 +112,7 @@ export function update() {
 
     variables.bomberElement.style.left = `${bomber.x * gridSize}px`;
     variables.bomberElement.style.top = `${bomber.y * gridSize}px`;
+
 }
 
 
@@ -101,12 +150,10 @@ export function generateMap() {
     for (let y = 0; y < mapHeight; y++) {
         const row = [];
         for (let x = 0; x < mapWidth; x++) {
-            // 1. Outer border
             if (x === 0 || y === 0 || x === mapWidth - 1 || y === mapHeight - 1) {
-                row.push(2); // fixed wall
+                row.push(2); 
             }
 
-            // 2. Reserved spawn areas (4 corners)
             else if (
                 // Top-left
                 (x === 1 && y === 1) || (x === 1 && y === 2) || (x === 2 && y === 1) ||
@@ -123,15 +170,13 @@ export function generateMap() {
                 (x === mapWidth - 2 && y === mapHeight - 3) ||
                 (x === mapWidth - 3 && y === mapHeight - 2)
             ) {
-                row.push(0); // empty
+                row.push(0); 
             }
 
-            // 3. Internal fixed wall (checkerboard)
             else if (x % 2 === 0 && y % 2 === 0) {
-                row.push(2); // fixed
+                row.push(2); 
             }
 
-            // 4. Random destructible wall or empty
             else {
                 const isRandomWall = Math.random() < 0.4;
                 row.push(isRandomWall ? 1 : 0);
@@ -163,6 +208,7 @@ function placeBomb() {
     el.style.top = `${bomb.y * gridSize}px`;
     el.style.backgroundImage = "url('frontend/img/bomb.png')";
     el.style.backgroundSize = 'contain';
+    el.style.backgroundRepeat = 'no-repeat';
     el.style.zIndex = 2;
 
     variables.container.appendChild(el);
@@ -222,32 +268,32 @@ function explodeBomb(bomb) {
 
 
 document.addEventListener('keydown', e => {
-    const { bomber, grid, mapWidth, mapHeight } = variables;
-    let nextX = bomber.x;
-    let nextY = bomber.y;
-    
-    //moving
-    if (e.key === "ArrowUp") nextY--;
-    else if (e.key === "ArrowDown") nextY++;
-    else if (e.key === "ArrowLeft") nextX--;
-    else if (e.key === "ArrowRight") nextX++;
+  const { bomber, grid, mapWidth, mapHeight } = variables;
+  let nextX = bomber.x;
+  let nextY = bomber.y;
 
-    //bomb
-    else if (e.code === 'Space') {
+  if (e.key === "ArrowUp") nextY--;
+  else if (e.key === "ArrowDown") nextY++;
+  else if (e.key === "ArrowLeft") nextX--;
+  else if (e.key === "ArrowRight") nextX++;
+
+  else if (e.code === 'Space') {
     placeBomb();
     return;
-    }
-    else return;
+  } else {
+    return;
+  }
 
-    if (nextX < 0 || nextX >= mapWidth || nextY < 0 || nextY >= mapHeight) return;
+  if (nextX < 0 || nextX >= mapWidth || nextY < 0 || nextY >= mapHeight) return;
 
-    const cell = grid[nextY][nextX];
-    if (cell === 1 || cell === 2) return; 
+  const cell = grid[nextY][nextX];
+  if (cell === 1 || cell === 2) return; 
 
-    bomber.x = nextX;
-    bomber.y = nextY;
+  bomber.x = nextX;
+  bomber.y = nextY;
 
-    update();
+  update();                  // Update local position
+  sendMovement(nextX, nextY); // Notify others
 });
 
 document.addEventListener('keyup', e => {
