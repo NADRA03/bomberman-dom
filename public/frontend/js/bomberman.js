@@ -1,4 +1,5 @@
 export const variables = {
+    container: document.getElementById('game-root'),
     score: 0,
     level: 0,
     lives: 3,
@@ -38,10 +39,12 @@ function gameLoop() {
     requestAnimationFrame(gameLoop);
 }
 
-// Start the game
-generateMap();
-drawWalls();
-gameLoop(); 
+export function startGame(container) {
+  variables.container = container;
+  generateMap();
+  drawWalls();
+  gameLoop();
+} 
 
 export function update() {
     const { bomber, bomberElement, gridSize } = variables;
@@ -55,7 +58,7 @@ export function update() {
         el.style.backgroundImage = "url('frontend/img/bomber.png')";
         el.style.backgroundSize = 'contain';
         el.style.zIndex = 1;
-        document.body.appendChild(el);
+        variables.container.appendChild(el);
         variables.bomberElement = el;
     }
 
@@ -85,7 +88,7 @@ export function drawWalls() {
             tile.style.backgroundSize = 'cover';
             tile.style.zIndex = '0';
 
-            document.body.appendChild(tile);
+            variables.container.appendChild(tile);
         });
     });
 }
@@ -140,19 +143,100 @@ export function generateMap() {
     variables.grid = grid;
 }
 
+function placeBomb() {
+    const { bomber, bombs, gridSize } = variables;
 
+    if (bombs.some(b => b.x === bomber.x && b.y === bomber.y)) return;
 
+    const bomb = {
+        x: bomber.x,
+        y: bomber.y,
+        timer: 2000
+    };
+
+    const el = document.createElement('div');
+    el.className = 'bomb';
+    el.style.position = 'absolute';
+    el.style.width = `${gridSize}px`;
+    el.style.height = `${gridSize}px`;
+    el.style.left = `${bomb.x * gridSize}px`;
+    el.style.top = `${bomb.y * gridSize}px`;
+    el.style.backgroundImage = "url('frontend/img/bomb.png')";
+    el.style.backgroundSize = 'contain';
+    el.style.zIndex = 2;
+
+    variables.container.appendChild(el);
+
+    bomb.element = el;
+    variables.bombs.push(bomb);
+
+    setTimeout(() => explodeBomb(bomb), bomb.timer);
+}
+
+function explodeBomb(bomb) {
+    const { gridSize, bombs, fires, grid } = variables;
+
+    bomb.element.remove();
+    variables.bombs = bombs.filter(b => b !== bomb);
+
+    const directions = [
+        [0, 0],
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1]
+    ];
+
+    directions.forEach(([dx, dy]) => {
+        const fx = bomb.x + dx;
+        const fy = bomb.y + dy;
+
+        if (fx < 0 || fx >= variables.mapWidth || fy < 0 || fy >= variables.mapHeight) return;
+        if (grid[fy][fx] === 2) return; 
+
+        if (grid[fy][fx] === 1) {
+            grid[fy][fx] = 0; 
+        }
+
+        const fire = document.createElement('div');
+        fire.className = 'fire';
+        fire.style.position = 'absolute';
+        fire.style.width = `${gridSize}px`;
+        fire.style.height = `${gridSize}px`;
+        fire.style.left = `${fx * gridSize}px`;
+        fire.style.top = `${fy * gridSize}px`;
+        fire.style.backgroundImage = "url('frontend/img/fire.png')";
+        fire.style.backgroundSize = 'contain';
+        fire.style.zIndex = 1;
+
+        variables.container.appendChild(fire);
+        fires.push(fire);
+
+        setTimeout(() => {
+            fire.remove();
+            variables.fires = variables.fires.filter(f => f !== fire);
+            drawWalls(); 
+        }, 400);
+    });
+}
 
 
 document.addEventListener('keydown', e => {
     const { bomber, grid, mapWidth, mapHeight } = variables;
     let nextX = bomber.x;
     let nextY = bomber.y;
-
+    
+    //moving
     if (e.key === "ArrowUp") nextY--;
     else if (e.key === "ArrowDown") nextY++;
     else if (e.key === "ArrowLeft") nextX--;
     else if (e.key === "ArrowRight") nextX++;
+
+    //bomb
+    else if (e.code === 'Space') {
+    placeBomb();
+    return;
+    }
     else return;
 
     if (nextX < 0 || nextX >= mapWidth || nextY < 0 || nextY >= mapHeight) return;

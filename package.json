@@ -1,0 +1,16 @@
+{
+  "name": "bomberman-dom",
+  "version": "1.0.0",
+  "description": "Bomberman DOM WebSocket backend",
+  "main": "backend/server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node backend/server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "ws": "^8.17.0"
+  },
+  "author": "Malak",
+  "license": "MIT"
+}
