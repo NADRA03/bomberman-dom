@@ -1,0 +1,19 @@
+# Node.js
+node_modules/
+package-lock.json
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS-specific
+.DS_Store
+Thumbs.db
+
+# Optional: Vite or bundler cache
+dist/
+build/
+
+# Optional: environment variables
+.env
