@@ -1,30 +1,19 @@
+// NOTE: Requires your mini-framework.js (StateManager, ViewRenderer, GameLoop, NetworkManager)
+
 import {
   sendMovement,
   onOtherPlayerMove,
   onExistingPlayers,
-  getClientId
+  getClientId,
+  requestMap,
+  onMapData,
+  sendBomb,
+  onBombPlaced
 } from './wsConnect.js';
 
-import { requestMap, onMapData } from './wsConnect.js';
+import { StateManager, ViewRenderer, GameLoop } from './mini-framework.js';
 
-export const variables = {
-  remotePlayers: {},
-  container: document.getElementById('game-root'),
-  score: 0,
-  level: 0,
-  lives: 3,
-  isGameOver: false,
-  direction: "down",
-  bomberElement: document.getElementById('bomber'),
-  wallElements: [],
-  bombElements: [],
-  fireElements: [],
-  bombs: [],
-  fires: [],
-  images: {
-    fixed: "frontend/img/solid.png",
-    random: "frontend/img/block.png"
-  },
+const state = new StateManager({
   bomber: {
     x: 1,
     y: 1,
@@ -35,274 +24,274 @@ export const variables = {
     movingLeft: false,
     movingRight: false
   },
+  remotePlayers: {},
+  grid: [],
+  bombs: [],
+  fires: [],
+  gridSize: 40,
   mapWidth: 15,
   mapHeight: 13,
-  gridSize: 40,
-  walls: [],
-  cameraOffsetX: 0,
-  cameraOffsetY: 0
-};
+  images: {
+    fixed: 'frontend/img/solid.png',
+    random: 'frontend/img/block.png'
+  },
+  container: null,
+  bomberElement: null
+});
+
+const view = new ViewRenderer('#game-root');
 
 export function startGame(container) {
-  variables.container = container;
-
+  state.setState({ container });
   requestMap();
 
   onMapData(grid => {
-    variables.grid = grid;
+    state.setState({ grid });
+
     drawWalls();
+
+    const spawnX = 1;
+    const spawnY = 1;
+    if (grid[spawnY][spawnX] !== 0) {
+      console.warn('Spawn blocked, clearing cell...');
+      grid[spawnY][spawnX] = 0;
+    }
+
+    state.setState(s => ({
+      ...s,
+      bomber: { ...s.bomber, x: spawnX, y: spawnY }
+    }));
+
+    sendMovement(spawnX, spawnY);
+    update();
   });
 
-  sendMovement(variables.bomber.x, variables.bomber.y); 
-
   onOtherPlayerMove(renderRemotePlayer);
-
   onExistingPlayers(players => {
     players.forEach(renderRemotePlayer);
   });
 
-  gameLoop();
+  onBombPlaced(({ x, y }) => {
+    const s = state.getState();
+
+    const bomb = {
+      x,
+      y,
+      timer: 2000
+    };
+
+    const el = view.el('div', {
+      className: 'bomb',
+      style: {
+        position: 'absolute',
+        width: `${s.gridSize}px`,
+        height: `${s.gridSize}px`,
+        left: `${x * s.gridSize}px`,
+        top: `${y * s.gridSize}px`,
+        backgroundImage: "url('frontend/img/bomb.png')",
+        backgroundSize: 'contain',
+        backgroundRepeat: 'no-repeat',
+        zIndex: 2
+      }
+    });
+
+    s.container.appendChild(el);
+    bomb.element = el;
+    s.bombs.push(bomb);
+
+    setTimeout(() => explodeBomb(bomb), bomb.timer);
+  });
+
+  const loop = new GameLoop(update, () => {}, 60);
+  loop.start();
 }
 
-function gameLoop() {
-  update();
-  requestAnimationFrame(gameLoop);
+function update() {
+  const s = state.getState();
+  const { bomber, gridSize, container } = s;
+
+  if (!s.bomberElement) {
+    const el = view.el('div', {
+      id: 'bomber',
+      style: {
+        position: 'absolute',
+        width: `${gridSize}px`,
+        height: `${gridSize}px`,
+        backgroundImage: "url('frontend/img/bomber.png')",
+        backgroundSize: 'contain',
+        zIndex: 1
+      }
+    });
+    container.appendChild(el);
+    state.setState({ bomberElement: el });
+  }
+
+  s.bomberElement.style.left = `${bomber.x * gridSize}px`;
+  s.bomberElement.style.top = `${bomber.y * gridSize}px`;
 }
 
 function renderRemotePlayer({ id, x, y }) {
   if (id === getClientId()) return;
 
-  if (!variables.remotePlayers[id]) {
-    const el = document.createElement('div');
-    el.className = 'remote-player';
-    el.style.position = 'absolute';
-    el.style.width = variables.gridSize + 'px';
-    el.style.height = variables.gridSize + 'px';
-    el.style.backgroundImage = "url('frontend/img/bomber.png')";
-    el.style.backgroundSize = 'contain';
-    el.style.zIndex = 1;
-    variables.container.appendChild(el);
-
-    variables.remotePlayers[id] = { x, y, element: el };
+  const s = state.getState();
+  if (!s.remotePlayers[id]) {
+    const el = view.el('div', {
+      className: 'remote-player',
+      style: {
+        position: 'absolute',
+        width: `${s.gridSize}px`,
+        height: `${s.gridSize}px`,
+        backgroundImage: "url('frontend/img/bomber.png')",
+        backgroundSize: 'contain',
+        zIndex: 1
+      }
+    });
+    s.container.appendChild(el);
+    s.remotePlayers[id] = { x, y, element: el };
   }
 
-  const player = variables.remotePlayers[id];
+  const player = s.remotePlayers[id];
   player.x = x;
   player.y = y;
-  player.element.style.left = `${x * variables.gridSize}px`;
-  player.element.style.top = `${y * variables.gridSize}px`;
+  player.element.style.left = `${x * s.gridSize}px`;
+  player.element.style.top = `${y * s.gridSize}px`;
 }
 
+function drawWalls() {
+  const { grid, gridSize, images, container } = state.getState();
+  document.querySelectorAll('.tile').forEach(el => el.remove());
 
-export function update() {
-    const { bomber, bomberElement, gridSize } = variables;
-
-    if (!variables.bomberElement) {
-        const el = document.createElement('div');
-        el.id = 'bomber';
-        el.style.position = 'absolute';
-        el.style.width = `${gridSize}px`;
-        el.style.height = `${gridSize}px`;
-        el.style.backgroundImage = "url('frontend/img/bomber.png')";
-        el.style.backgroundSize = 'contain';
-        el.style.zIndex = 1;
-        variables.container.appendChild(el);
-        variables.bomberElement = el;
-    }
-
-    variables.bomberElement.style.left = `${bomber.x * gridSize}px`;
-    variables.bomberElement.style.top = `${bomber.y * gridSize}px`;
-
-}
-
-
-
-export function drawWalls() {
-    const { grid, gridSize, images } = variables;
-
-    document.querySelectorAll(".tile").forEach(el => el.remove());
-
-    grid.forEach((row, y) => {
-        row.forEach((cell, x) => {
-            if (cell === 0) return; 
-
-            const tile = document.createElement('div');
-            tile.className = 'tile';
-            tile.style.position = 'absolute';
-            tile.style.width = gridSize + 'px';
-            tile.style.height = gridSize + 'px';
-            tile.style.left = `${x * gridSize}px`;
-            tile.style.top = `${y * gridSize}px`;
-            tile.style.backgroundImage = `url('${cell === 2 ? images.fixed : images.random}')`;
-            tile.style.backgroundSize = 'cover';
-            tile.style.zIndex = '0';
-
-            variables.container.appendChild(tile);
-        });
-    });
-}
-
-
-export function generateMap() {
-    const { mapWidth, mapHeight } = variables;
-    const grid = [];
-
-    for (let y = 0; y < mapHeight; y++) {
-        const row = [];
-        for (let x = 0; x < mapWidth; x++) {
-            if (x === 0 || y === 0 || x === mapWidth - 1 || y === mapHeight - 1) {
-                row.push(2); 
-            }
-
-            else if (
-                // Top-left
-                (x === 1 && y === 1) || (x === 1 && y === 2) || (x === 2 && y === 1) ||
-                // Top-right
-                (x === mapWidth - 2 && y === 1) || 
-                (x === mapWidth - 3 && y === 1) || 
-                (x === mapWidth - 2 && y === 2) ||
-                // Bottom-left
-                (x === 1 && y === mapHeight - 2) ||
-                (x === 2 && y === mapHeight - 2) ||
-                (x === 1 && y === mapHeight - 3) ||
-                // Bottom-right
-                (x === mapWidth - 2 && y === mapHeight - 2) ||
-                (x === mapWidth - 2 && y === mapHeight - 3) ||
-                (x === mapWidth - 3 && y === mapHeight - 2)
-            ) {
-                row.push(0); 
-            }
-
-            else if (x % 2 === 0 && y % 2 === 0) {
-                row.push(2); 
-            }
-
-            else {
-                const isRandomWall = Math.random() < 0.4;
-                row.push(isRandomWall ? 1 : 0);
-            }
+  grid.forEach((row, y) => {
+    row.forEach((cell, x) => {
+      if (cell === 0) return;
+      const tile = view.el('div', {
+        className: 'tile',
+        style: {
+          position: 'absolute',
+          width: `${gridSize}px`,
+          height: `${gridSize}px`,
+          left: `${x * gridSize}px`,
+          top: `${y * gridSize}px`,
+          backgroundImage: `url('${cell === 2 ? images.fixed : images.random}')`,
+          backgroundSize: 'cover',
+          zIndex: 0
         }
-        grid.push(row);
-    }
-
-    variables.grid = grid;
+      });
+      container.appendChild(tile);
+    });
+  });
 }
 
 function placeBomb() {
-    const { bomber, bombs, gridSize } = variables;
+  const s = state.getState();
+  const { bomber, bombs, gridSize, container } = s;
 
-    if (bombs.some(b => b.x === bomber.x && b.y === bomber.y)) return;
+  if (bombs.some(b => b.x === bomber.x && b.y === bomber.y)) return;
 
-    const bomb = {
-        x: bomber.x,
-        y: bomber.y,
-        timer: 2000
-    };
+  const bomb = {
+    x: bomber.x,
+    y: bomber.y,
+    timer: 2000
+  };
 
-    const el = document.createElement('div');
-    el.className = 'bomb';
-    el.style.position = 'absolute';
-    el.style.width = `${gridSize}px`;
-    el.style.height = `${gridSize}px`;
-    el.style.left = `${bomb.x * gridSize}px`;
-    el.style.top = `${bomb.y * gridSize}px`;
-    el.style.backgroundImage = "url('frontend/img/bomb.png')";
-    el.style.backgroundSize = 'contain';
-    el.style.backgroundRepeat = 'no-repeat';
-    el.style.zIndex = 2;
+  const el = view.el('div', {
+    className: 'bomb',
+    style: {
+      position: 'absolute',
+      width: `${gridSize}px`,
+      height: `${gridSize}px`,
+      left: `${bomb.x * gridSize}px`,
+      top: `${bomb.y * gridSize}px`,
+      backgroundImage: "url('frontend/img/bomb.png')",
+      backgroundSize: 'contain',
+      backgroundRepeat: 'no-repeat',
+      zIndex: 2
+    }
+  });
 
-    variables.container.appendChild(el);
-
-    bomb.element = el;
-    variables.bombs.push(bomb);
-
-    setTimeout(() => explodeBomb(bomb), bomb.timer);
+  container.appendChild(el);
+  bomb.element = el;
+  bombs.push(bomb);
+  sendBomb(bomb.x, bomb.y);
+  setTimeout(() => explodeBomb(bomb), bomb.timer);
 }
 
 function explodeBomb(bomb) {
-    const { gridSize, bombs, fires, grid } = variables;
+  const s = state.getState();
+  const { gridSize, bombs, fires, grid, container } = s;
 
-    bomb.element.remove();
-    variables.bombs = bombs.filter(b => b !== bomb);
+  bomb.element.remove();
+  s.bombs = bombs.filter(b => b !== bomb);
 
-    const directions = [
-        [0, 0],
-        [1, 0],
-        [-1, 0],
-        [0, 1],
-        [0, -1]
-    ];
+  const directions = [ [0, 0], [1, 0], [-1, 0], [0, 1], [0, -1] ];
 
-    directions.forEach(([dx, dy]) => {
-        const fx = bomb.x + dx;
-        const fy = bomb.y + dy;
+  directions.forEach(([dx, dy]) => {
+    const fx = bomb.x + dx;
+    const fy = bomb.y + dy;
+    if (fx < 0 || fx >= s.mapWidth || fy < 0 || fy >= s.mapHeight) return;
+    if (grid[fy][fx] === 2) return;
+    if (grid[fy][fx] === 1) grid[fy][fx] = 0;
 
-        if (fx < 0 || fx >= variables.mapWidth || fy < 0 || fy >= variables.mapHeight) return;
-        if (grid[fy][fx] === 2) return; 
-
-        if (grid[fy][fx] === 1) {
-            grid[fy][fx] = 0; 
-        }
-
-        const fire = document.createElement('div');
-        fire.className = 'fire';
-        fire.style.position = 'absolute';
-        fire.style.width = `${gridSize}px`;
-        fire.style.height = `${gridSize}px`;
-        fire.style.left = `${fx * gridSize}px`;
-        fire.style.top = `${fy * gridSize}px`;
-        fire.style.backgroundImage = "url('frontend/img/fire.png')";
-        fire.style.backgroundSize = 'contain';
-        fire.style.zIndex = 1;
-
-        variables.container.appendChild(fire);
-        fires.push(fire);
-
-        setTimeout(() => {
-            fire.remove();
-            variables.fires = variables.fires.filter(f => f !== fire);
-            drawWalls(); 
-        }, 400);
+    const fire = view.el('div', {
+      className: 'fire',
+      style: {
+        position: 'absolute',
+        width: `${gridSize}px`,
+        height: `${gridSize}px`,
+        left: `${fx * gridSize}px`,
+        top: `${fy * gridSize}px`,
+        backgroundImage: "url('frontend/img/fire.png')",
+        backgroundSize: 'contain',
+        zIndex: 1
+      }
     });
+
+    container.appendChild(fire);
+    fires.push(fire);
+
+    setTimeout(() => {
+      fire.remove();
+      state.setState({ fires: fires.filter(f => f !== fire) });
+      drawWalls();
+    }, 400);
+  });
 }
 
-
 document.addEventListener('keydown', e => {
-  const { bomber, grid, mapWidth, mapHeight } = variables;
+  const s = state.getState();
+  const { bomber, grid, mapWidth, mapHeight } = s;
   let nextX = bomber.x;
   let nextY = bomber.y;
 
-  if (e.key === "ArrowUp") nextY--;
-  else if (e.key === "ArrowDown") nextY++;
-  else if (e.key === "ArrowLeft") nextX--;
-  else if (e.key === "ArrowRight") nextX++;
-
-  else if (e.code === 'Space') {
-    placeBomb();
-    return;
-  } else {
-    return;
-  }
+  if (e.key === 'ArrowUp') nextY--;
+  else if (e.key === 'ArrowDown') nextY++;
+  else if (e.key === 'ArrowLeft') nextX--;
+  else if (e.key === 'ArrowRight') nextX++;
+  else if (e.code === 'Space') return placeBomb();
+  else return;
 
   if (nextX < 0 || nextX >= mapWidth || nextY < 0 || nextY >= mapHeight) return;
-
   const cell = grid[nextY][nextX];
-  if (cell === 1 || cell === 2) return; 
+  if (cell === 1 || cell === 2) return;
 
   bomber.x = nextX;
   bomber.y = nextY;
 
-  update();                  // Update local position
-  sendMovement(nextX, nextY); // Notify others
+  update();
+  sendMovement(nextX, nextY);
 });
 
 document.addEventListener('keyup', e => {
-    const b = variables.bomber;
-    if (e.key === "ArrowUp") b.movingUp = false;
-    if (e.key === "ArrowDown") b.movingDown = false;
-    if (e.key === "ArrowLeft") b.movingLeft = false;
-    if (e.key === "ArrowRight") b.movingRight = false;
+  const b = state.getState().bomber;
+  if (e.key === 'ArrowUp') b.movingUp = false;
+  if (e.key === 'ArrowDown') b.movingDown = false;
+  if (e.key === 'ArrowLeft') b.movingLeft = false;
+  if (e.key === 'ArrowRight') b.movingRight = false;
 });
+
+
+
+
 
 
 

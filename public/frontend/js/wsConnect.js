@@ -3,12 +3,16 @@ const socket = new WebSocket(`ws://${location.host}`);
 const clientId = sessionStorage.getItem('clientId') || crypto.randomUUID();
 sessionStorage.setItem('clientId', clientId);
 
+document.cookie = `player_id=${clientId}; path=/`;
+
+
 let userListCallback = () => {};
 let movementCallback = () => {};
 let spawnCallback = () => {};
 let existingPlayersCallback = () => {};
 let otherSpawnCallback = () => {};
 let mapCallback = () => {};
+let bombCallback = () => {};
 
 socket.addEventListener('open', () => {
   console.log('✅ Connected to WebSocket server');
@@ -47,6 +51,11 @@ socket.addEventListener('message', event => {
       mapCallback(data.grid);
       break;
 
+    case 'bomb':
+      console.log('[WS] Bomb placed at:', data.x, data.y);
+      bombCallback({ x: data.x, y: data.y });
+      break;
+
     case 'error':
       console.error('[WS] Error:', data.message);
       alert(data.message);
@@ -79,6 +88,23 @@ export function sendMovement(x, y) {
   if (socket.readyState === WebSocket.OPEN) {
     socket.send(JSON.stringify(payload));
   }
+}
+
+export function sendBomb(x, y) {
+  console.log("sending bommb")
+  const payload = {
+    type: 'bomb',
+    id: clientId,
+    x,
+    y
+  };
+  if (socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify(payload));
+  }
+}
+
+export function onBombPlaced(callback) {
+  bombCallback = callback;
 }
 
 export function onUserListUpdate(callback) {
@@ -119,6 +145,8 @@ export function requestMap() {
     socket.addEventListener('open', send, { once: true });
   }
 }
+
+
 
 
 

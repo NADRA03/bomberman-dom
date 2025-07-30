@@ -1,96 +1,119 @@
+import { StateManager, Router, ViewRenderer } from './mini-framework.js';
 import { sendUsername, onUserListUpdate } from './wsConnect.js';
 
+// Create the app container
 const app = document.createElement('div');
 app.id = 'app';
 document.body.appendChild(app);
 
-const routes = {
-  '': renderNameForm,
-  '#': renderNameForm,
-  '#lobby': renderLobby,
-  '#play': renderPlay
+// Initialize state manager
+const stateManager = new StateManager({
+  playerName: '',
+  users: [],
+  countdown: null,
+});
+
+const view = new ViewRenderer('#app');
+
+// Top-level render dispatcher
+const renderApp = (state, el) => {
+  const path = window.location.hash.slice(1) || '';
+
+  if (path === '') return renderNameForm(stateManager, el);
+  if (path === 'lobby') return renderLobby(stateManager, el);
+  if (path === 'play') return renderPlay(stateManager, el);
+  return renderNotFound(el);
 };
 
-window.addEventListener('hashchange', router);
-window.addEventListener('DOMContentLoaded', router);
+view.mount(stateManager, renderApp);
 
-function router() {
-  const hash = window.location.hash;
-  const route = routes[hash] || renderNotFound;
-  route();
+// Router setup
+const router = new Router();
+router.handleRoute();
+window.addEventListener('hashchange', () => router.handleRoute());
+
+// Views
+
+function renderNameForm(sm, el) {
+  return el('div', {}, 
+    el('h1', {}, 'Enter Your Name'),
+    el('input', {
+      id: 'player-name',
+      placeholder: 'Your name',
+      bind: 'playerName',
+    }),
+    el('button', {
+      onclick: () => {
+        const name = sm.getState().playerName.trim() || 'Player';
+        sm.setState({ playerName: name });
+        sendUsername(name);
+        window.location.hash = '#lobby';
+      }
+    }, 'Enter Lobby')
+  );
 }
 
-function renderNameForm() {
-  app.innerHTML = `
-    <h1>Enter Your Name</h1>
-    <input id="player-name" placeholder="Your name" />
-    <button id="connect-btn">Enter Lobby</button>
-  `;
+function renderLobby(sm, el) {
+  const state = sm.getState();
 
-  document.getElementById('connect-btn').onclick = () => {
-    const name = document.getElementById('player-name').value.trim() || 'Player';
-    window.playerName = name;
-    sendUsername(name); 
-    window.location.hash = '#lobby';
-  };
-}
-
-function renderLobby() {
-  app.innerHTML = `
-    <h1>Lobby</h1>
-    <p>Welcome, <strong>${window.playerName}</strong></p>
-    <h3>Connected Players:</h3>
-    <ul id="user-list"></ul>
-    <p id="countdown"></p>
-    <button id="start-game">Start Game</button>
-  `;
-
-  document.getElementById('start-game').onclick = () => {
-    window.location.hash = '#play';
-  };
-
-  let countdownStarted = false;
-  let countdownTimer;
-
+  // Countdown and user list update (triggered once from WebSocket)
   onUserListUpdate(users => {
-    const ul = document.getElementById('user-list');
-    ul.innerHTML = users.map(u => `<li>${u}</li>`).join('');
+    sm.setState({ users });
 
-    const countdownEl = document.getElementById('countdown');
-
-    if (users.length >= 2 && !countdownStarted) {
-      countdownStarted = true;
+    if (users.length >= 2 && sm.getState().countdown == null) {
       let seconds = 5;
-      countdownEl.textContent = `Game starting in ${seconds}...`;
+      sm.setState({ countdown: seconds });
 
-      countdownTimer = setInterval(() => {
+      const timer = setInterval(() => {
         seconds--;
-        countdownEl.textContent = `Game starting in ${seconds}...`;
+        sm.setState({ countdown: seconds });
         if (seconds <= 0) {
-          clearInterval(countdownTimer);
+          clearInterval(timer);
           window.location.hash = '#play';
         }
       }, 1000);
     }
 
-    // Reset if players drop below 2
-    if (users.length < 2 && countdownStarted) {
-      countdownStarted = false;
-      clearInterval(countdownTimer);
-      countdownEl.textContent = '';
+    if (users.length < 2 && sm.getState().countdown != null) {
+      sm.setState({ countdown: null });
     }
   });
+
+  return el('div', {},
+    el('h1', {}, 'Lobby'),
+    el('p', {}, 'Welcome, ', el('strong', {}, state.playerName)),
+    el('h3', {}, 'Connected Players:'),
+    el('ul', {},
+      state.users.map(u => el('li', {}, u))
+    ),
+    el('p', {}, state.countdown != null ? `Game starting in ${state.countdown}...` : ''),
+    el('button', {
+      onclick: () => {
+        window.location.hash = '#play';
+      }
+    }, 'Start Game')
+  );
 }
 
+function renderPlay(sm, el) {
+  // Load Bomberman module once
+  setTimeout(() => {
+    const container = document.getElementById('game-root');
+    if (container) {
+      import('./bomberman.js').then(mod => {
+        mod.startGame(container);
+      });
+    }
+  }, 0);
 
-function renderPlay() {
-  app.innerHTML = `<div id="game-root"></div>`;
-  import('./bomberman.js').then(mod => {
-    mod.startGame(document.getElementById('game-root'));
-  });
+  return el('div', {},
+    el('div', { id: 'game-root' })
+  );
 }
 
-function renderNotFound() {
-  app.innerHTML = '<h1>404 Not Found</h1><a href="#">Go to Home</a>';
+function renderNotFound(el) {
+  return el('div', {},
+    el('h1', {}, '404 Not Found'),
+    el('a', { href: '#'}, 'Go to Home')
+  );
 }
-

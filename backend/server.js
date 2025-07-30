@@ -3,6 +3,7 @@ import http from 'http';
 import { WebSocketServer } from 'ws';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import cookie from 'cookie';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -68,8 +69,16 @@ function broadcast(type, payload) {
   });
 }
 
-wss.on('connection', (ws) => {
-  // Send map data on connection
+wss.on('connection', (ws, req) => {
+  const cookies = cookie.parse(req.headers.cookie || '');
+  const playerId = cookies.player_id;
+
+  if (!playerId) {
+    ws.send(JSON.stringify({ type: 'error', message: 'Missing player_id cookie' }));
+    ws.close();
+    return;
+  }
+
   ws.send(JSON.stringify({
     type: 'map-data',
     grid: mapData
@@ -85,14 +94,12 @@ wss.on('connection', (ws) => {
     }
 
     if (data.type === 'request-map') {
-      console.log("sending mapData");
       ws.send(JSON.stringify({
         type: 'map-data',
         grid: mapData
       }));
     }
 
-    // Handle new user connection
     if (data.type === 'new-user') {
       if (takenSpawns.has(data.id)) {
         takenSpawns.delete(data.id);
@@ -113,7 +120,6 @@ wss.on('connection', (ws) => {
       };
       takenSpawns.set(data.id, spawn);
 
-      // Send all existing players to new user
       const others = Object.values(users)
         .filter(u => u.id !== data.id)
         .map(u => ({ id: u.id, name: u.name, x: u.x, y: u.y }));
@@ -125,7 +131,6 @@ wss.on('connection', (ws) => {
         }));
       }
 
-      // Send spawn-position to the new user (for their own position)
       ws.send(JSON.stringify({
         type: 'spawn-position',
         id: data.id,
@@ -133,20 +138,17 @@ wss.on('connection', (ws) => {
         y: spawn.y
       }));
 
-      // Broadcast spawn-position to others
       broadcast('spawn-position', {
         id: data.id,
         x: spawn.x,
         y: spawn.y
       });
 
-      // Update user list
       broadcast('user-list', {
         users: Object.values(users).map(u => u.name)
       });
     }
 
-    // Handle movement
     if (data.type === 'player-move') {
       if (users[data.id]) {
         users[data.id].x = data.x;
@@ -165,6 +167,16 @@ wss.on('connection', (ws) => {
           client.send(moveData);
         }
       });
+    }
+
+    if (data.type === 'bomb') {
+      const bombData = {
+        type: 'bomb',
+        id: data.id,
+        x: data.x,
+        y: data.y
+      };
+      broadcast('bomb', bombData);
     }
   });
 
@@ -188,5 +200,6 @@ const PORT = 8000;
 server.listen(PORT, () => {
   console.log(`✅ HTTP + WS server running at http://localhost:${PORT}`);
 });
+
 
 
