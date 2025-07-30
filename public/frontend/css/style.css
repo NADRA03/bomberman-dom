@@ -1,1 +1,30 @@
-/* main css */
+/* Ensure the body fills the screen and centers content */
+body {
+  margin: 0;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Center the entire app (name form, lobby, etc.) */
+#app {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Center the game area */
+#game-root {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  /* Optional: set exact dimensions or auto-size */
+  min-width: 600px;
+  min-height: 520px;
+  margin: auto;
+}
