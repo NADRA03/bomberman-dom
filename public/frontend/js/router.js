@@ -82,7 +82,7 @@ function renderLobby(sm, el) {
   return el('div', {},
     el('h1', {}, 'Lobby'),
     el('p', {}, 'Welcome, ', el('strong', {}, state.playerName)),
-    el('h3', {}, 'Connected Players:'),
+    el('h1', {}, 'Connected Players:'),
     el('ul', {},
       state.users.map(u => el('li', {}, u))
     ),

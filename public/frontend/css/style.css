@@ -1,10 +1,20 @@
+@import url('https://fonts.googleapis.com/css2?family=Jersey+10&family=Jersey+10+Charted&family=Micro+5&display=swap');
+
 /* Ensure the body fills the screen and centers content */
 body {
+  font-family: "Jersey 10", sans-serif;
+  font-weight: 50;
   margin: 0;
   height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+/* Inherit font for all form elements */
+input, button, select, textarea {
+  font-family: "Jersey 10", sans-serif;
+  font-weight: 50;
 }
 
 /* Center the entire app (name form, lobby, etc.) */
@@ -28,3 +38,4 @@ body {
   min-height: 520px;
   margin: auto;
 }
+
