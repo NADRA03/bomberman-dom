@@ -28,6 +28,7 @@ const state = new StateManager({
   grid: [],
   bombs: [],
   fires: [],
+  lives: 3,
   gridSize: 40,
   mapWidth: 15,
   mapHeight: 13,
@@ -36,7 +37,8 @@ const state = new StateManager({
     random: 'frontend/img/block.png'
   },
   container: null,
-  bomberElement: null
+  bomberElement: null,
+  heartContainer: null
 });
 
 const view = new ViewRenderer('#game-root');
@@ -47,8 +49,8 @@ export function startGame(container) {
 
   onMapData(grid => {
     state.setState({ grid });
-
     drawWalls();
+    drawHearts();
 
     const spawnX = 1;
     const spawnY = 1;
@@ -104,6 +106,38 @@ export function startGame(container) {
 
   const loop = new GameLoop(update, () => {}, 60);
   loop.start();
+}
+
+function drawHearts() {
+  const s = state.getState();
+  if (s.heartContainer) s.heartContainer.remove();
+
+  const container = view.el('div', {
+    style: {
+        position: 'fixed',
+        top: '30px',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        display: 'flex',
+        gap: '5px',
+        zIndex: 1000,
+        pointerEvents: 'none'
+    }
+  });
+
+  for (let i = 0; i < s.lives; i++) {
+    const heart = view.el('img', {
+      src: 'frontend/img/heart.png',
+      style: {
+        width: '30px',
+        height: '30px'
+      }
+    });
+    container.appendChild(heart);
+  }
+
+  document.body.appendChild(container);
+  state.setState({ heartContainer: container });
 }
 
 function update() {
@@ -218,7 +252,7 @@ function placeBomb() {
 
 function explodeBomb(bomb) {
   const s = state.getState();
-  const { gridSize, bombs, fires, grid, container } = s;
+  const { gridSize, bombs, fires, grid, container, bomber } = s;
 
   bomb.element.remove();
   s.bombs = bombs.filter(b => b !== bomb);
@@ -248,6 +282,18 @@ function explodeBomb(bomb) {
 
     container.appendChild(fire);
     fires.push(fire);
+
+    if (bomber.x === fx && bomber.y === fy && s.lives > 0) {
+    const newLives = s.lives - 1;
+    state.setState({
+        ...s,
+        lives: newLives,
+        bomber: { ...bomber, x: 1, y: 1 }
+    });
+    drawHearts();
+    sendMovement(1, 1);
+    update();
+    }
 
     setTimeout(() => {
       fire.remove();
@@ -288,7 +334,6 @@ document.addEventListener('keyup', e => {
   if (e.key === 'ArrowLeft') b.movingLeft = false;
   if (e.key === 'ArrowRight') b.movingRight = false;
 });
-
 
 
 

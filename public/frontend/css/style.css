@@ -4,17 +4,21 @@
 body {
   font-family: "Jersey 10", sans-serif;
   font-weight: 50;
+  background: #000;
+  color: white;
   margin: 0;
   height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
+  font-size: 25px;
 }
 
 /* Inherit font for all form elements */
 input, button, select, textarea {
   font-family: "Jersey 10", sans-serif;
   font-weight: 50;
+  font-size: 25px;
 }
 
 /* Center the entire app (name form, lobby, etc.) */
@@ -38,4 +42,19 @@ input, button, select, textarea {
   min-height: 520px;
   margin: auto;
 }
+
+#game-root {
+    background-color: green;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+h1 {
+    font-size: 50px;
+    font-weight: 50;
+}
+
 
