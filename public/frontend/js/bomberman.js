@@ -8,7 +8,11 @@ import {
   requestMap,
   onMapData,
   sendBomb,
-  onBombPlaced
+  onBombPlaced,
+  onPlayerDisconnect,
+  onSpawnPosition,
+  onAnySpawnPosition,
+  sendStartGame
 } from './wsConnect.js';
 
 import { StateManager, ViewRenderer, GameLoop } from './mini-framework.js';
@@ -45,7 +49,21 @@ const view = new ViewRenderer('#game-root');
 
 export function startGame(container) {
   state.setState({ container });
-  requestMap();
+  requestMap(); 
+
+  onSpawnPosition(({ x, y }) => {
+    const s = state.getState();
+    state.setState({
+      ...s,
+      bomber: { ...s.bomber, x, y }
+    });
+    sendMovement(x, y);
+    update();
+  });
+
+  onAnySpawnPosition(({ id, x, y }) => {
+    renderRemotePlayer({ id, x, y });
+  });
 
   onMapData(grid => {
     state.setState({ grid });
@@ -64,13 +82,29 @@ export function startGame(container) {
       bomber: { ...s.bomber, x: spawnX, y: spawnY }
     }));
 
-    sendMovement(spawnX, spawnY);
+    sendStartGame(); 
     update();
   });
 
   onOtherPlayerMove(renderRemotePlayer);
   onExistingPlayers(players => {
     players.forEach(renderRemotePlayer);
+  });
+
+  onPlayerDisconnect(id => {
+    const s = state.getState();
+    const newRemotePlayers = { ...s.remotePlayers };
+
+    const player = newRemotePlayers[id];
+    if (player) {
+      player.element.remove();
+      delete newRemotePlayers[id];
+
+      state.setState({
+        ...s,
+        remotePlayers: newRemotePlayers
+      });
+    }
   });
 
   onBombPlaced(({ x, y }) => {
@@ -189,6 +223,7 @@ function renderRemotePlayer({ id, x, y }) {
   player.y = y;
   player.element.style.left = `${x * s.gridSize}px`;
   player.element.style.top = `${y * s.gridSize}px`;
+
 }
 
 function drawWalls() {

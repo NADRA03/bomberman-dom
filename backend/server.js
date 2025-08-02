@@ -33,19 +33,19 @@ function generateMapData(width, height) {
     const row = [];
     for (let x = 0; x < width; x++) {
       if (x === 0 || y === 0 || x === width - 1 || y === height - 1) {
-        row.push(2); 
+        row.push(2);
       } else if (
         (x === 1 && y === 1) || (x === 1 && y === 2) || (x === 2 && y === 1) ||
         (x === width - 2 && y === 1) || (x === width - 3 && y === 1) || (x === width - 2 && y === 2) ||
         (x === 1 && y === height - 2) || (x === 2 && y === height - 2) || (x === 1 && y === height - 3) ||
         (x === width - 2 && y === height - 2) || (x === width - 2 && y === height - 3) || (x === width - 3 && y === height - 2)
       ) {
-        row.push(0); 
+        row.push(0);
       } else if (x % 2 === 0 && y % 2 === 0) {
-        row.push(2); 
+        row.push(2);
       } else {
         const isRandomWall = Math.random() < 0.4;
-        row.push(isRandomWall ? 1 : 0); 
+        row.push(isRandomWall ? 1 : 0);
       }
     }
     grid.push(row);
@@ -101,6 +101,22 @@ wss.on('connection', (ws, req) => {
     }
 
     if (data.type === 'new-user') {
+      users[data.id] = {
+        id: data.id,
+        name: data.name,
+        ws,
+        x: null,
+        y: null
+      };
+
+      broadcast('user-list', {
+        users: Object.values(users).map(u => u.name)
+      });
+    }
+
+    if (data.type === 'start-game') {
+      if (!users[data.id]) return;
+
       if (takenSpawns.has(data.id)) {
         takenSpawns.delete(data.id);
       }
@@ -111,17 +127,12 @@ wss.on('connection', (ws, req) => {
         return;
       }
 
-      users[data.id] = {
-        id: data.id,
-        name: data.name,
-        ws,
-        x: spawn.x,
-        y: spawn.y
-      };
+      users[data.id].x = spawn.x;
+      users[data.id].y = spawn.y;
       takenSpawns.set(data.id, spawn);
 
       const others = Object.values(users)
-        .filter(u => u.id !== data.id)
+        .filter(u => u.id !== data.id && u.x !== null && u.y !== null)
         .map(u => ({ id: u.id, name: u.name, x: u.x, y: u.y }));
 
       if (others.length > 0) {
@@ -142,10 +153,6 @@ wss.on('connection', (ws, req) => {
         id: data.id,
         x: spawn.x,
         y: spawn.y
-      });
-
-      broadcast('user-list', {
-        users: Object.values(users).map(u => u.name)
       });
     }
 
@@ -187,9 +194,7 @@ wss.on('connection', (ws, req) => {
       takenSpawns.delete(id);
       delete users[id];
 
-      broadcast('user-list', {
-        users: Object.values(users).map(u => u.name)
-      });
+      broadcast('player-disconnect', { id });
     }
   });
 });

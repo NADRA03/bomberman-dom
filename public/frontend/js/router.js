@@ -1,12 +1,10 @@
 import { StateManager, Router, ViewRenderer } from './mini-framework.js';
 import { sendUsername, onUserListUpdate } from './wsConnect.js';
 
-// Create the app container
 const app = document.createElement('div');
 app.id = 'app';
 document.body.appendChild(app);
 
-// Initialize state manager
 const stateManager = new StateManager({
   playerName: '',
   users: [],
@@ -15,7 +13,7 @@ const stateManager = new StateManager({
 
 const view = new ViewRenderer('#app');
 
-// Top-level render dispatcher
+
 const renderApp = (state, el) => {
   const path = window.location.hash.slice(1) || '';
 
@@ -27,12 +25,12 @@ const renderApp = (state, el) => {
 
 view.mount(stateManager, renderApp);
 
-// Router setup
+
 const router = new Router();
 router.handleRoute();
 window.addEventListener('hashchange', () => router.handleRoute());
 
-// Views
+
 
 function renderNameForm(sm, el) {
   return el('div', {}, 
@@ -46,6 +44,7 @@ function renderNameForm(sm, el) {
       onclick: () => {
         const name = sm.getState().playerName.trim() || 'Player';
         sm.setState({ playerName: name });
+        localStorage.setItem('playerName', name); 
         sendUsername(name);
         window.location.hash = '#lobby';
       }
@@ -56,7 +55,7 @@ function renderNameForm(sm, el) {
 function renderLobby(sm, el) {
   const state = sm.getState();
 
-  // Countdown and user list update (triggered once from WebSocket)
+
   onUserListUpdate(users => {
     sm.setState({ users });
 
@@ -96,7 +95,6 @@ function renderLobby(sm, el) {
 }
 
 function renderPlay(sm, el) {
-  // Load Bomberman module once
   setTimeout(() => {
     const container = document.getElementById('game-root');
     if (container) {
