@@ -85,11 +85,14 @@ wss.on('connection', (ws, req) => {
   }));
 
   ws.on('message', (msg) => {
+    const raw = msg.toString();
+    console.log('📩 Received raw msg:', raw);
+
     let data;
     try {
-      data = JSON.parse(msg);
+      data = JSON.parse(raw);
     } catch (err) {
-      console.error('Invalid JSON:', msg);
+      console.error('Invalid JSON:', raw);
       return;
     }
 
@@ -178,6 +181,38 @@ wss.on('connection', (ws, req) => {
       };
       broadcast('bomb', bombData);
     }
+
+if (data.type === 'chat-message') {
+  console.log('[CHAT] Incoming:', data);
+
+  const { id, room, text } = data.payload; // Note: accessing data.payload
+  if (!id) {
+    console.warn('❌ Missing player ID');
+    return;
+  }
+
+  const user = users[id];
+  if (!user) {
+    console.warn('❌ Unknown player:', id);
+    return;
+  }
+
+  const message = {
+    type: 'chat-message',
+    room,
+    from: user.name,
+    text
+  };
+
+  // Broadcast to all clients
+  const messageStr = JSON.stringify(message);
+  wss.clients.forEach(client => {
+    if (client.readyState === client.OPEN) {
+      client.send(messageStr);
+    }
+  });
+}
+
   });
 
   ws.on('close', () => {
