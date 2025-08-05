@@ -22,7 +22,9 @@ const state = new StateManager({
     x: 1,
     y: 1,
     size: 40,
+    color: 'blue',
     speed: 1,
+    direction: 'down', 
     movingUp: false,
     movingDown: false,
     movingLeft: false,
@@ -51,18 +53,18 @@ export function startGame(container) {
   state.setState({ container });
   requestMap(); 
 
-  onSpawnPosition(({ x, y }) => {
+  onSpawnPosition(({ x, y, color }) => {
     const s = state.getState();
     state.setState({
       ...s,
-      bomber: { ...s.bomber, x, y }
+      bomber: { ...s.bomber, x, y, color }
     });
     sendMovement(x, y);
     update();
   });
 
-  onAnySpawnPosition(({ id, x, y }) => {
-    renderRemotePlayer({ id, x, y });
+  onAnySpawnPosition(({ id, x, y, color }) => {
+    renderRemotePlayer({ id, x, y, color });
   });
 
   onMapData(grid => {
@@ -177,6 +179,7 @@ function drawHearts() {
 function update() {
   const s = state.getState();
   const { bomber, gridSize, container } = s;
+  const color = bomber.color || 'blue'; 
 
   if (!s.bomberElement) {
     const el = view.el('div', {
@@ -185,8 +188,10 @@ function update() {
         position: 'absolute',
         width: `${gridSize}px`,
         height: `${gridSize}px`,
-        backgroundImage: "url('frontend/img/bomber.png')",
-        backgroundSize: 'contain',
+        backgroundImage: `url('frontend/img/${color}/b-front.png')`,
+        backgroundSize: `${gridSize}px ${gridSize}px`,
+        imageRendering: 'pixelated',
+        backgroundRepeat: 'no-repeat',
         zIndex: 1
       }
     });
@@ -194,14 +199,30 @@ function update() {
     state.setState({ bomberElement: el });
   }
 
-  s.bomberElement.style.left = `${bomber.x * gridSize}px`;
-  s.bomberElement.style.top = `${bomber.y * gridSize}px`;
+  const el = s.bomberElement;
+  el.style.left = `${bomber.x * gridSize}px`;
+  el.style.top = `${bomber.y * gridSize}px`;
+
+  if (bomber.direction === 'up') {
+    el.style.backgroundImage = `url('frontend/img/${color}/b-back.png')`;
+    el.style.transform = 'scaleX(1)';
+  } else if (bomber.direction === 'down') {
+    el.style.backgroundImage = `url('frontend/img/${color}/b-front.png')`;
+    el.style.transform = 'scaleX(1)';
+  } else if (bomber.direction === 'right') {
+    el.style.backgroundImage = `url('frontend/img/${color}/b-side.png')`;
+    el.style.transform = 'scaleX(-1)';
+  } else if (bomber.direction === 'left') {
+    el.style.backgroundImage = `url('frontend/img/${color}/b-side.png')`;
+    el.style.transform = 'scaleX(1)';
+  }
 }
 
-function renderRemotePlayer({ id, x, y }) {
+function renderRemotePlayer({ id, x, y, color = 'blue' }) {
   if (id === getClientId()) return;
 
   const s = state.getState();
+
   if (!s.remotePlayers[id]) {
     const el = view.el('div', {
       className: 'remote-player',
@@ -209,21 +230,52 @@ function renderRemotePlayer({ id, x, y }) {
         position: 'absolute',
         width: `${s.gridSize}px`,
         height: `${s.gridSize}px`,
-        backgroundImage: "url('frontend/img/bomber.png')",
-        backgroundSize: 'contain',
+        backgroundImage: `url('frontend/img/${color}/b-front.png')`,
+        backgroundSize: `${s.gridSize}px ${s.gridSize}px`,
+        imageRendering: 'pixelated',
+        backgroundRepeat: 'no-repeat',
         zIndex: 1
       }
     });
     s.container.appendChild(el);
-    s.remotePlayers[id] = { x, y, element: el };
+    s.remotePlayers[id] = {
+      x,
+      y,
+      direction: 'down',
+      color,
+      element: el
+    };
   }
 
   const player = s.remotePlayers[id];
+
+  if (x > player.x) player.direction = 'right';
+  else if (x < player.x) player.direction = 'left';
+  else if (y > player.y) player.direction = 'down';
+  else if (y < player.y) player.direction = 'up';
+
   player.x = x;
   player.y = y;
-  player.element.style.left = `${x * s.gridSize}px`;
-  player.element.style.top = `${y * s.gridSize}px`;
 
+  const el = player.element;
+  el.style.left = `${x * s.gridSize}px`;
+  el.style.top = `${y * s.gridSize}px`;
+
+  const folder = player.color || 'blue';
+
+  if (player.direction === 'up') {
+    el.style.backgroundImage = `url('frontend/img/${folder}/b-back.png')`;
+    el.style.transform = 'scaleX(1)';
+  } else if (player.direction === 'down') {
+    el.style.backgroundImage = `url('frontend/img/${folder}/b-front.png')`;
+    el.style.transform = 'scaleX(1)';
+  } else if (player.direction === 'right') {
+    el.style.backgroundImage = `url('frontend/img/${folder}/b-side.png')`;
+    el.style.transform = 'scaleX(-1)';
+  } else if (player.direction === 'left') {
+    el.style.backgroundImage = `url('frontend/img/${folder}/b-side.png')`;
+    el.style.transform = 'scaleX(1)';
+  }
 }
 
 function drawWalls() {
@@ -344,10 +396,23 @@ document.addEventListener('keydown', e => {
   let nextX = bomber.x;
   let nextY = bomber.y;
 
-  if (e.key === 'ArrowUp') nextY--;
-  else if (e.key === 'ArrowDown') nextY++;
-  else if (e.key === 'ArrowLeft') nextX--;
-  else if (e.key === 'ArrowRight') nextX++;
+  if (e.key === 'ArrowUp') {
+    nextY--;
+    bomber.direction = 'up';
+  }
+  else if (e.key === 'ArrowDown') {
+    nextY++;
+    bomber.direction = 'down';
+  }
+  else if (e.key === 'ArrowLeft') {
+    nextX--;
+    bomber.direction = 'left';
+  }
+  else if (e.key === 'ArrowRight') {
+    nextX++;
+    bomber.direction = 'right';
+  }
+
   else if (e.code === 'Space') return placeBomb();
   else return;
 

@@ -24,11 +24,15 @@ const spawnPoints = [
   { x: 13, y: 11 }
 ];
 
-const mapData = generateMapData(mapWidth, mapHeight);
+const availableColors = ['blue', 'yellow', 'brown', 'grey'];
+
+function getAvailableColor() {
+  const taken = new Set(Object.values(users).map(u => u.color));
+  return availableColors.find(c => !taken.has(c)) || 'blue';
+}
 
 function generateMapData(width, height) {
   const grid = [];
-
   for (let y = 0; y < height; y++) {
     const row = [];
     for (let x = 0; x < width; x++) {
@@ -50,9 +54,10 @@ function generateMapData(width, height) {
     }
     grid.push(row);
   }
-
   return grid;
 }
+
+const mapData = generateMapData(mapWidth, mapHeight);
 
 function getAvailableSpawn() {
   return spawnPoints.find(spawn =>
@@ -79,10 +84,7 @@ wss.on('connection', (ws, req) => {
     return;
   }
 
-  ws.send(JSON.stringify({
-    type: 'map-data',
-    grid: mapData
-  }));
+  ws.send(JSON.stringify({ type: 'map-data', grid: mapData }));
 
   ws.on('message', (msg) => {
     let data;
@@ -94,21 +96,13 @@ wss.on('connection', (ws, req) => {
     }
 
     if (data.type === 'request-map') {
-      ws.send(JSON.stringify({
-        type: 'map-data',
-        grid: mapData
-      }));
+      ws.send(JSON.stringify({ type: 'map-data', grid: mapData }));
     }
 
     if (data.type === 'new-user') {
-      const currentPlayerCount = Object.keys(users).length;
-
-      if (currentPlayerCount >= 4) {
-        ws.send(JSON.stringify({
-          type: 'error',
-          message: 'Lobby is full. Maximum 4 players allowed.'
-        }));
-        ws.close(); 
+      if (Object.keys(users).length >= 4) {
+        ws.send(JSON.stringify({ type: 'error', message: 'Lobby full (max 4 players)' }));
+        ws.close();
         return;
       }
 
@@ -117,11 +111,17 @@ wss.on('connection', (ws, req) => {
         name: data.name,
         ws,
         x: null,
-        y: null
+        y: null,
+        color: getAvailableColor()
       };
 
       broadcast('user-list', {
-        users: Object.values(users).map(u => u.name)
+        users: Object.values(users).map(u => ({
+          id: u.id,
+          name: u.name,
+          status: (u.x !== null && u.y !== null) ? 'playing' : 'waiting',
+          color: u.color
+        }))
       });
     }
 
@@ -144,7 +144,7 @@ wss.on('connection', (ws, req) => {
 
       const others = Object.values(users)
         .filter(u => u.id !== data.id && u.x !== null && u.y !== null)
-        .map(u => ({ id: u.id, name: u.name, x: u.x, y: u.y }));
+        .map(u => ({ id: u.id, name: u.name, x: u.x, y: u.y, color: u.color }));
 
       if (others.length > 0) {
         ws.send(JSON.stringify({
@@ -157,13 +157,15 @@ wss.on('connection', (ws, req) => {
         type: 'spawn-position',
         id: data.id,
         x: spawn.x,
-        y: spawn.y
+        y: spawn.y,
+        color: users[data.id].color
       }));
 
       broadcast('spawn-position', {
         id: data.id,
         x: spawn.x,
-        y: spawn.y
+        y: spawn.y,
+        color: users[data.id].color
       });
     }
 
@@ -188,13 +190,12 @@ wss.on('connection', (ws, req) => {
     }
 
     if (data.type === 'bomb') {
-      const bombData = {
+      broadcast('bomb', {
         type: 'bomb',
         id: data.id,
         x: data.x,
         y: data.y
-      };
-      broadcast('bomb', bombData);
+      });
     }
   });
 
@@ -204,7 +205,6 @@ wss.on('connection', (ws, req) => {
       const [id] = userEntry;
       takenSpawns.delete(id);
       delete users[id];
-
       broadcast('player-disconnect', { id });
     }
   });

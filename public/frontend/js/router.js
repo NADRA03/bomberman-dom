@@ -119,7 +119,9 @@ function renderLobby(sm, el) {
     el('p', {}, 'Welcome, ', el('strong', {}, state.playerName)),
     el('h1', {}, 'Connected Players:'),
     el('ul', {},
-      state.users.map(u => el('li', {}, u))
+      state.users.map(u =>
+        el('li', {}, `${u.name} (${u.status}) - ${u.color}`)
+      )
     ),
     el('p', {}, state.countdown != null ? `Game starting in ${state.countdown}...` : ''),
     el('button', {
