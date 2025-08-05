@@ -1,10 +1,9 @@
-const socket = new WebSocket(`ws://${location.host}`);
-
 const clientId = sessionStorage.getItem('clientId') || crypto.randomUUID();
 sessionStorage.setItem('clientId', clientId);
 
 document.cookie = `player_id=${clientId}; path=/`;
 
+const socket = new WebSocket(`ws://${location.host}`);
 
 let userListCallback = () => {};
 let movementCallback = () => {};
@@ -14,8 +13,25 @@ let otherSpawnCallback = () => {};
 let mapCallback = () => {};
 let bombCallback = () => {};
 
+let chatCallback = null;
+
+
 socket.addEventListener('open', () => {
   console.log('✅ Connected to WebSocket server');
+  console.log('Client ID:', clientId);       
+  console.log('Cookie set:', document.cookie);
+});
+
+socket.addEventListener('close', (event) => {
+  console.log('❌ WebSocket closed:', event.code, event.reason);
+  setTimeout(() => {
+    console.log('🔄 Attempting to reconnect...');
+    location.reload();
+  }, 2000);
+});
+
+socket.addEventListener('error', (error) => {
+  console.error('❌ WebSocket error:', error);
 });
 
 socket.addEventListener('message', event => {
@@ -58,15 +74,22 @@ socket.addEventListener('message', event => {
 
     case 'error':
       console.error('[WS] Error:', data.message);
-      alert(data.message);
+      if (data.message !== 'Missing player_id cookie') {
+        alert(data.message);
+      }
       break;
+
+    case 'chat-message':
+      if (chatCallback) chatCallback(data);
+      break;
+
 
     default:
       console.warn('[WS] Unknown message type:', data);
   }
 });
 
-export function sendUsername(username) {
+export function sendUsername(username, id) {
   const payload = {
     type: 'new-user',
     id: clientId,
@@ -129,6 +152,24 @@ export function onAnySpawnPosition(callback) {
 
 export function onMapData(callback) {
   mapCallback = callback;
+}
+
+export function onChatMessage(callback) {
+  chatCallback = callback;
+}
+
+export function sendChatMessage({ id, room, text }) {
+  const payload = {
+    type: 'chat-message',
+    payload: { id: clientId, room, text }
+  };
+  console.log('Sending chat message with ID:', clientId);
+  
+  if (socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify(payload));
+  } else {
+    console.error('❌ Cannot send chat message: WebSocket not open, state:', socket.readyState);
+  }
 }
 
 export const getClientId = () => clientId;

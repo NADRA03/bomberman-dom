@@ -253,7 +253,11 @@ export class NetworkManager {
 
   // Send a message with type and payload
   send(type, payload) {
-    this.socket.send(JSON.stringify({ type, payload }));
+    const message = JSON.stringify({ type, payload });
+    console.log('[NetworkManager] Sending:', message);
+    this.socket.send(message);
+    // REMOVED THE DUPLICATE LINE THAT WAS CAUSING THE ERROR:
+    // this.socket.send(message); // This was the bug!
   }
 }
 
