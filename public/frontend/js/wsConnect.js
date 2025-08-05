@@ -33,7 +33,7 @@ socket.addEventListener('message', event => {
 
     case 'spawn-position':
       if (data.id === clientId) {
-        spawnCallback({ x: data.x, y: data.y });
+        spawnCallback({ x: data.x, y: data.y, color: data.color });
       } else {
         otherSpawnCallback(data);
       }

@@ -55,10 +55,13 @@ export function startGame(container) {
 
   onSpawnPosition(({ x, y, color }) => {
     const s = state.getState();
-    state.setState({
-      ...s,
-      bomber: { ...s.bomber, x, y, color }
-    });
+        if (s.bomberElement) s.bomberElement.remove();
+
+        state.setState({
+        ...s,
+        bomber: { ...s.bomber, x, y, color },
+        bomberElement: null 
+        });
     sendMovement(x, y);
     update();
   });
