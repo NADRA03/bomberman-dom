@@ -59,6 +59,11 @@ socket.addEventListener('message', event => {
     case 'error':
       console.error('[WS] Error:', data.message);
       alert(data.message);
+
+      // Optional: Redirect back to name input if lobby is full
+      if (data.message.includes('Lobby is full')) {
+        window.location.hash = '#';
+      }
       break;
 
     default:
@@ -160,4 +165,5 @@ export function requestMap() {
   if (socket.readyState === WebSocket.OPEN) send();
   else socket.addEventListener('open', send, { once: true });
 }
+
 

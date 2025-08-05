@@ -101,6 +101,17 @@ wss.on('connection', (ws, req) => {
     }
 
     if (data.type === 'new-user') {
+      const currentPlayerCount = Object.keys(users).length;
+
+      if (currentPlayerCount >= 4) {
+        ws.send(JSON.stringify({
+          type: 'error',
+          message: 'Lobby is full. Maximum 4 players allowed.'
+        }));
+        ws.close(); 
+        return;
+      }
+
       users[data.id] = {
         id: data.id,
         name: data.name,
