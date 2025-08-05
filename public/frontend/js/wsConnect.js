@@ -5,7 +5,6 @@ sessionStorage.setItem('clientId', clientId);
 
 document.cookie = `player_id=${clientId}; path=/`;
 
-
 let userListCallback = () => {};
 let movementCallback = () => {};
 let spawnCallback = () => {};
@@ -13,6 +12,7 @@ let existingPlayersCallback = () => {};
 let otherSpawnCallback = () => {};
 let mapCallback = () => {};
 let bombCallback = () => {};
+let disconnectCallback = () => {};
 
 socket.addEventListener('open', () => {
   console.log('✅ Connected to WebSocket server');
@@ -28,16 +28,12 @@ socket.addEventListener('message', event => {
       break;
 
     case 'player-move':
-      if (data.id === clientId) {
-        spawnCallback({ x: data.x, y: data.y });
-      } else {
-        movementCallback(data);
-      }
+      movementCallback(data);
       break;
 
     case 'spawn-position':
       if (data.id === clientId) {
-        spawnCallback({ x: data.x, y: data.y });
+        spawnCallback({ x: data.x, y: data.y, color: data.color });
       } else {
         otherSpawnCallback(data);
       }
@@ -56,9 +52,18 @@ socket.addEventListener('message', event => {
       bombCallback({ x: data.x, y: data.y });
       break;
 
+    case 'player-disconnect':
+      disconnectCallback(data.id);
+      break;
+
     case 'error':
       console.error('[WS] Error:', data.message);
       alert(data.message);
+
+      // Optional: Redirect back to name input if lobby is full
+      if (data.message.includes('Lobby is full')) {
+        window.location.hash = '#';
+      }
       break;
 
     default:
@@ -66,11 +71,24 @@ socket.addEventListener('message', event => {
   }
 });
 
+// === Outbound Messages ===
+
 export function sendUsername(username) {
   const payload = {
     type: 'new-user',
     id: clientId,
     name: username
+  };
+
+  const send = () => socket.send(JSON.stringify(payload));
+  if (socket.readyState === WebSocket.OPEN) send();
+  else socket.addEventListener('open', send, { once: true });
+}
+
+export function sendStartGame() {
+  const payload = {
+    type: 'start-game',
+    id: clientId
   };
 
   const send = () => socket.send(JSON.stringify(payload));
@@ -91,7 +109,6 @@ export function sendMovement(x, y) {
 }
 
 export function sendBomb(x, y) {
-  console.log("sending bommb")
   const payload = {
     type: 'bomb',
     id: clientId,
@@ -102,6 +119,8 @@ export function sendBomb(x, y) {
     socket.send(JSON.stringify(payload));
   }
 }
+
+// === Event Hooks ===
 
 export function onBombPlaced(callback) {
   bombCallback = callback;
@@ -119,36 +138,32 @@ export function onSpawnPosition(callback) {
   spawnCallback = callback;
 }
 
-export function onExistingPlayers(callback) {
-  existingPlayersCallback = callback;
-}
-
 export function onAnySpawnPosition(callback) {
   otherSpawnCallback = callback;
+}
+
+export function onExistingPlayers(callback) {
+  existingPlayersCallback = callback;
 }
 
 export function onMapData(callback) {
   mapCallback = callback;
 }
 
+export function onPlayerDisconnect(callback) {
+  disconnectCallback = callback;
+}
+
+// === Utility ===
+
 export const getClientId = () => clientId;
 
 export function requestMap() {
   const payload = { type: 'request-map' };
-  const send = () => {
-    socket.send(JSON.stringify(payload));
-  };
 
-  if (socket.readyState === WebSocket.OPEN) {
-    send();
-  } else {
-    socket.addEventListener('open', send, { once: true });
-  }
+  const send = () => socket.send(JSON.stringify(payload));
+  if (socket.readyState === WebSocket.OPEN) send();
+  else socket.addEventListener('open', send, { once: true });
 }
-
-
-
-
-
 
 

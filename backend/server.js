@@ -24,35 +24,40 @@ const spawnPoints = [
   { x: 13, y: 11 }
 ];
 
-const mapData = generateMapData(mapWidth, mapHeight);
+const availableColors = ['blue', 'yellow', 'brown', 'grey'];
+
+function getAvailableColor() {
+  const taken = new Set(Object.values(users).map(u => u.color));
+  return availableColors.find(c => !taken.has(c)) || 'blue';
+}
 
 function generateMapData(width, height) {
   const grid = [];
-
   for (let y = 0; y < height; y++) {
     const row = [];
     for (let x = 0; x < width; x++) {
       if (x === 0 || y === 0 || x === width - 1 || y === height - 1) {
-        row.push(2); 
+        row.push(2);
       } else if (
         (x === 1 && y === 1) || (x === 1 && y === 2) || (x === 2 && y === 1) ||
         (x === width - 2 && y === 1) || (x === width - 3 && y === 1) || (x === width - 2 && y === 2) ||
         (x === 1 && y === height - 2) || (x === 2 && y === height - 2) || (x === 1 && y === height - 3) ||
         (x === width - 2 && y === height - 2) || (x === width - 2 && y === height - 3) || (x === width - 3 && y === height - 2)
       ) {
-        row.push(0); 
+        row.push(0);
       } else if (x % 2 === 0 && y % 2 === 0) {
-        row.push(2); 
+        row.push(2);
       } else {
         const isRandomWall = Math.random() < 0.4;
-        row.push(isRandomWall ? 1 : 0); 
+        row.push(isRandomWall ? 1 : 0);
       }
     }
     grid.push(row);
   }
-
   return grid;
 }
+
+const mapData = generateMapData(mapWidth, mapHeight);
 
 function getAvailableSpawn() {
   return spawnPoints.find(spawn =>
@@ -79,10 +84,7 @@ wss.on('connection', (ws, req) => {
     return;
   }
 
-  ws.send(JSON.stringify({
-    type: 'map-data',
-    grid: mapData
-  }));
+  ws.send(JSON.stringify({ type: 'map-data', grid: mapData }));
 
   ws.on('message', (msg) => {
     let data;
@@ -94,13 +96,38 @@ wss.on('connection', (ws, req) => {
     }
 
     if (data.type === 'request-map') {
-      ws.send(JSON.stringify({
-        type: 'map-data',
-        grid: mapData
-      }));
+      ws.send(JSON.stringify({ type: 'map-data', grid: mapData }));
     }
 
     if (data.type === 'new-user') {
+      if (Object.keys(users).length >= 4) {
+        ws.send(JSON.stringify({ type: 'error', message: 'Lobby full (max 4 players)' }));
+        ws.close();
+        return;
+      }
+
+      users[data.id] = {
+        id: data.id,
+        name: data.name,
+        ws,
+        x: null,
+        y: null,
+        color: getAvailableColor()
+      };
+
+      broadcast('user-list', {
+        users: Object.values(users).map(u => ({
+          id: u.id,
+          name: u.name,
+          status: (u.x !== null && u.y !== null) ? 'playing' : 'waiting',
+          color: u.color
+        }))
+      });
+    }
+
+    if (data.type === 'start-game') {
+      if (!users[data.id]) return;
+
       if (takenSpawns.has(data.id)) {
         takenSpawns.delete(data.id);
       }
@@ -111,18 +138,13 @@ wss.on('connection', (ws, req) => {
         return;
       }
 
-      users[data.id] = {
-        id: data.id,
-        name: data.name,
-        ws,
-        x: spawn.x,
-        y: spawn.y
-      };
+      users[data.id].x = spawn.x;
+      users[data.id].y = spawn.y;
       takenSpawns.set(data.id, spawn);
 
       const others = Object.values(users)
-        .filter(u => u.id !== data.id)
-        .map(u => ({ id: u.id, name: u.name, x: u.x, y: u.y }));
+        .filter(u => u.id !== data.id && u.x !== null && u.y !== null)
+        .map(u => ({ id: u.id, name: u.name, x: u.x, y: u.y, color: u.color }));
 
       if (others.length > 0) {
         ws.send(JSON.stringify({
@@ -135,17 +157,15 @@ wss.on('connection', (ws, req) => {
         type: 'spawn-position',
         id: data.id,
         x: spawn.x,
-        y: spawn.y
+        y: spawn.y,
+        color: users[data.id].color
       }));
 
       broadcast('spawn-position', {
         id: data.id,
         x: spawn.x,
-        y: spawn.y
-      });
-
-      broadcast('user-list', {
-        users: Object.values(users).map(u => u.name)
+        y: spawn.y,
+        color: users[data.id].color
       });
     }
 
@@ -170,13 +190,12 @@ wss.on('connection', (ws, req) => {
     }
 
     if (data.type === 'bomb') {
-      const bombData = {
+      broadcast('bomb', {
         type: 'bomb',
         id: data.id,
         x: data.x,
         y: data.y
-      };
-      broadcast('bomb', bombData);
+      });
     }
   });
 
@@ -186,10 +205,7 @@ wss.on('connection', (ws, req) => {
       const [id] = userEntry;
       takenSpawns.delete(id);
       delete users[id];
-
-      broadcast('user-list', {
-        users: Object.values(users).map(u => u.name)
-      });
+      broadcast('player-disconnect', { id });
     }
   });
 });
