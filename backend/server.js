@@ -87,6 +87,9 @@ wss.on('connection', (ws, req) => {
   ws.send(JSON.stringify({ type: 'map-data', grid: mapData }));
 
   ws.on('message', (msg) => {
+    const raw = msg.toString();
+    console.log('Received raw msg:', raw);
+
     let data;
     try {
       data = JSON.parse(msg);
@@ -197,6 +200,36 @@ wss.on('connection', (ws, req) => {
         y: data.y
       });
     }
+
+      if (data.type === 'chat-message') {
+  console.log('[CHAT] Incoming:', data);
+
+  const { id, room, text } = data.payload;
+  if (!id) {
+    console.warn('Missing player ID');
+    return;
+  }
+
+  const user = users[id];
+  if (!user) {
+    console.warn('Unknown player:', id);
+    return;
+  }
+
+  const message = {
+    type: 'chat-message',
+    room,
+    from: user.name,
+    text
+  };
+
+  const messageStr = JSON.stringify(message);
+  wss.clients.forEach(client => {
+    if (client.readyState === client.OPEN) {
+      client.send(messageStr);
+    }
+  });
+      }
   });
 
   ws.on('close', () => {
