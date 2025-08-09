@@ -12,7 +12,10 @@ import {
   onPlayerDisconnect,
   onSpawnPosition,
   onAnySpawnPosition,
-  sendStartGame
+  sendStartGame,
+  onPowerupSpawn,
+  onPowerupPicked,
+  sendPickupPowerup
 } from './wsConnect.js';
 
 import { StateManager, ViewRenderer, GameLoop } from './mini-framework.js';
@@ -44,7 +47,10 @@ const state = new StateManager({
   },
   container: null,
   bomberElement: null,
-  heartContainer: null
+  heartContainer: null,
+
+  powerups: [],
+  stats: { maxBombs: 1},
 });
 
 const view = new ViewRenderer('#game-root');
@@ -142,6 +148,51 @@ export function startGame(container) {
 
     setTimeout(() => explodeBomb(bomb), bomb.timer);
   });
+
+  onPowerupSpawn(spawn => {
+  const s = state.getState();
+  const { gridSize, container, powerups } = s;
+
+  const iconByType = {
+    bombs: 'frontend/img/bombPlusOne.png',
+  };
+  const iconUrl = iconByType[spawn.type] || 'frontend/img/bombPlusOne.png';
+
+  const el = view.el('div', {
+    className: `powerup powerup-${spawn.type}`,
+    id: `pu-${spawn.id}`,
+    style: {
+      position: 'absolute',
+      width: `${gridSize}px`,
+      height: `${gridSize}px`,
+      left: `${spawn.x * gridSize}px`,
+      top: `${spawn.y * gridSize}px`,
+      backgroundImage: `url('${iconUrl}')`,
+      backgroundSize: 'contain',
+      backgroundRepeat: 'no-repeat',
+      zIndex: 1
+    }
+  });
+
+  container.appendChild(el);
+  const next = powerups.concat([{ ...spawn, element: el }]);
+  state.setState({ powerups: next });
+});
+
+onPowerupPicked(({ id, by, type, newMaxBombs }) => {
+  const s = state.getState();
+  const puIndex = s.powerups.findIndex(p => p.id === id);
+  if (puIndex !== -1) {
+    s.powerups[puIndex].element?.remove();
+    const next = s.powerups.slice();
+    next.splice(puIndex, 1);
+    state.setState({ powerups: next });
+  }
+
+  if (by === getClientId() && type === 'bombs') {
+    state.setState({ stats: { ...s.stats, maxBombs: newMaxBombs } });
+  }
+});
 
   const loop = new GameLoop(update, () => {}, 60);
   loop.start();
@@ -308,36 +359,8 @@ function drawWalls() {
 
 function placeBomb() {
   const s = state.getState();
-  const { bomber, bombs, gridSize, container } = s;
-
-  if (bombs.some(b => b.x === bomber.x && b.y === bomber.y)) return;
-
-  const bomb = {
-    x: bomber.x,
-    y: bomber.y,
-    timer: 2000
-  };
-
-  const el = view.el('div', {
-    className: 'bomb',
-    style: {
-      position: 'absolute',
-      width: `${gridSize}px`,
-      height: `${gridSize}px`,
-      left: `${bomb.x * gridSize}px`,
-      top: `${bomb.y * gridSize}px`,
-      backgroundImage: "url('frontend/img/bomb.png')",
-      backgroundSize: 'contain',
-      backgroundRepeat: 'no-repeat',
-      zIndex: 2
-    }
-  });
-
-  container.appendChild(el);
-  bomb.element = el;
-  bombs.push(bomb);
-  sendBomb(bomb.x, bomb.y);
-  setTimeout(() => explodeBomb(bomb), bomb.timer);
+  const { bomber } = s;
+  sendBomb(bomber.x, bomber.y);
 }
 
 function explodeBomb(bomb) {
@@ -393,6 +416,15 @@ function explodeBomb(bomb) {
   });
 }
 
+function tryPickupPowerup() {
+  const s = state.getState();
+  const { bomber, powerups } = s;
+  const pu = powerups.find(p => p.x === bomber.x && p.y === bomber.y);
+  if (!pu) return;
+
+  sendPickupPowerup(pu.id);
+}
+
 document.addEventListener('keydown', e => {
   const s = state.getState();
   const { bomber, grid, mapWidth, mapHeight } = s;
@@ -428,6 +460,7 @@ document.addEventListener('keydown', e => {
 
   update();
   sendMovement(nextX, nextY);
+  tryPickupPowerup();
 });
 
 document.addEventListener('keyup', e => {
