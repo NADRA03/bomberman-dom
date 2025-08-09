@@ -274,25 +274,25 @@ wss.on('connection', (ws, req) => {
             }, 2000);
         }
 
-        if (data.type === 'pickup-powerup') {
-            const u = users[data.id];
-            if (!u) return;
-            const pu = powerups.get(data.powerupId);
-            if (!pu) return;
+        // if (data.type === 'pickup-powerup') {
+        //     const u = users[data.id];
+        //     if (!u) return;
+        //     const pu = powerups.get(data.powerupId);
+        //     if (!pu) return;
 
-            if (u.x !== pu.x || u.y !== pu.y) return;
+        //     if (u.x !== pu.x || u.y !== pu.y) return;
 
-            if (pu.type === 'bombs') {
-                u.stats.maxBombs += 1;
-                powerups.delete(pu.id);
-                broadcast('powerup-picked', {
-                    id: pu.id,
-                    by: u.id,
-                    type: pu.type,
-                    newMaxBombs: u.stats.maxBombs
-                });
-            }
-        }
+        //     if (pu.type === 'bombs') {
+        //         u.stats.maxBombs += 1;
+        //         powerups.delete(pu.id);
+        //         broadcast('powerup-picked', {
+        //             id: pu.id,
+        //             by: u.id,
+        //             type: pu.type,
+        //             newMaxBombs: u.stats.maxBombs
+        //         });
+        //     }
+        // }
 
         if (data.type === 'chat-message') {
             console.log('[CHAT] Incoming:', data);

@@ -192,12 +192,12 @@ export function onPowerupPicked(callback) {
 
 export const getClientId = () => clientId;
 
-export function sendPickupPowerup(powerupId) {
-    const payload = { type: 'pickup-powerup', id: clientId, powerupId };
-    if (socket.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify(payload));
-    }
-}
+// export function sendPickupPowerup(powerupId) {
+//     const payload = { type: 'pickup-powerup', id: clientId, powerupId };
+//     if (socket.readyState === WebSocket.OPEN) {
+//         socket.send(JSON.stringify(payload));
+//     }
+// }
 
 export function sendChatMessage({ id, room, text }) {
     const payload = {
