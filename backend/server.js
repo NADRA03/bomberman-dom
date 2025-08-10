@@ -95,22 +95,22 @@ function explodeServerBomb(user, bx, by) {
 
     maybeDestroyAndSpawn(bx, by);
 
-  for (const [dx, dy] of dirs) {
-    for (let k = 1; k <= range; k++) {
-      const fx = bx + dx * k;
-      const fy = by + dy * k;
-      if (fx < 0 || fx >= mapWidth || fy < 0 || fy >= mapHeight) break;
+    for (const [dx, dy] of dirs) {
+        for (let k = 1; k <= range; k++) {
+            const fx = bx + dx * k;
+            const fy = by + dy * k;
+            if (fx < 0 || fx >= mapWidth || fy < 0 || fy >= mapHeight) break;
 
-      const cell = mapData[fy][fx];
-      if (cell === 2) break;      
+            const cell = mapData[fy][fx];
+            if (cell === 2) break;
 
-      if (cell === 1) {  
-        mapData[fy][fx] = 0;
-        maybeSpawnPowerup(fx, fy);
-        break;
-      }
+            if (cell === 1) {
+                mapData[fy][fx] = 0;
+                maybeSpawnPowerup(fx, fy);
+                break;
+            }
+        }
     }
-  }
 }
 
 function maybeDestroyAndSpawn(x, y) {
@@ -123,9 +123,9 @@ function maybeDestroyAndSpawn(x, y) {
 function maybeSpawnPowerup(x, y) {
     const roll = Math.random();
     const type =
-    roll < 0.15 ? 'flames' :
-    roll < 0.30 ? 'bombs'  :
-    null;
+        roll < 0.15 ? 'flames' :
+            roll < 0.30 ? 'bombs' :
+                null;
 
     if (!type) return;
 
@@ -175,11 +175,12 @@ wss.on('connection', (ws, req) => {
                 x: null,
                 y: null,
                 color: getAvailableColor(),
-                stats: { 
+                stats: {
                     maxBombs: 1,
                     flameRange: 1,
-                 },
-                activeBombs: 0
+                },
+                activeBombs: 0,
+                lastMoveAt: 0,
             };
 
             broadcast('user-list', {
@@ -237,10 +238,24 @@ wss.on('connection', (ws, req) => {
         }
 
         if (data.type === 'player-move') {
-            if (users[data.id]) {
-                users[data.id].x = data.x;
-                users[data.id].y = data.y;
+            const u = users[data.id];
+            if (!u) return;
+
+            const now = Date.now();
+            const MOVE_INTERVAL_MS = 100;
+            if (u.lastMoveAt && now - u.lastMoveAt < MOVE_INTERVAL_MS) {
+                return;
             }
+            u.lastMoveAt = now;
+
+            const dx = Math.abs((data.x ?? u.x) - (u.x ?? 0));
+            const dy = Math.abs((data.y ?? u.y) - (u.y ?? 0));
+            if (dx + dy !== 1) return;   
+            if (data.x < 0 || data.x >= mapWidth || data.y < 0 || data.y >= mapHeight) return;
+            if (mapData[data.y][data.x] === 1 || mapData[data.y][data.x] === 2) return;
+
+            u.x = data.x;
+            u.y = data.y;
 
             const moveData = JSON.stringify({
                 type: 'player-move',
@@ -248,25 +263,21 @@ wss.on('connection', (ws, req) => {
                 x: data.x,
                 y: data.y
             });
-
             wss.clients.forEach(client => {
-                if (client.readyState === ws.OPEN) {
-                    client.send(moveData);
-                }
+                if (client.readyState === ws.OPEN) client.send(moveData);
             });
 
             const pu = [...powerups.values()].find(p => p.x === data.x && p.y === data.y);
             if (pu) {
-                const u = users[data.id];
                 if (pu.type === 'bombs') {
-                 u.stats.maxBombs += 1;
-                 powerups.delete(pu.id);
-                 broadcast('powerup-picked', {
-                    id: pu.id,
-                    by: u.id,
-                    powerupType: 'bombs',
-                    newMaxBombs: u.stats.maxBombs
-                });
+                    u.stats.maxBombs += 1;
+                    powerups.delete(pu.id);
+                    broadcast('powerup-picked', {
+                        id: pu.id,
+                        by: u.id,
+                        powerupType: 'bombs',
+                        newMaxBombs: u.stats.maxBombs
+                    });
                 } else if (pu.type === 'flames') {
                     u.stats.flameRange = (u.stats?.flameRange || 1) + 1;
                     powerups.delete(pu.id);
@@ -285,7 +296,7 @@ wss.on('connection', (ws, req) => {
             if (!u) return;
 
             if (u.activeBombs >= u.stats.maxBombs) {
-                ws.send(JSON.stringify({ type: 'error', message: 'bomb cap reached' }));
+                // ws.send(JSON.stringify({ type: 'error', message: 'bomb cap reached' }));
                 return;
             }
 

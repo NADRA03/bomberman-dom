@@ -216,9 +216,18 @@ export function startGame(container) {
         }
     });
 
-    const loop = new GameLoop(update, () => { }, 60);
+    const loop = new GameLoop(() => {
+    stepMovement();
+    update();
+    }, () => {}, 60);
+
     loop.start();
 }
+
+const MOVE_INTERVAL_MS = 120;
+
+let keysDown = { up:false, down:false, left:false, right:false };
+let lastMoveAt = 0;
 
 function drawHearts() {
     const s = state.getState();
@@ -470,42 +479,46 @@ function tryPickupPowerup() {
 }
 
 document.addEventListener('keydown', e => {
-    const s = state.getState();
-    const { bomber, grid, mapWidth, mapHeight } = s;
-    let nextX = bomber.x;
-    let nextY = bomber.y;
-
-    if (e.key === 'ArrowUp') {
-        nextY--;
-        bomber.direction = 'up';
-    } else if (e.key === 'ArrowDown') {
-        nextY++;
-        bomber.direction = 'down';
-    } else if (e.key === 'ArrowLeft') {
-        nextX--;
-        bomber.direction = 'left';
-    } else if (e.key === 'ArrowRight') {
-        nextX++;
-        bomber.direction = 'right';
-    } else if (e.code === 'Space') return placeBomb();
-    else return;
-
-    if (nextX < 0 || nextX >= mapWidth || nextY < 0 || nextY >= mapHeight) return;
-    const cell = grid[nextY][nextX];
-    if (cell === 1 || cell === 2) return;
-
-    bomber.x = nextX;
-    bomber.y = nextY;
-
-    update();
-    sendMovement(nextX, nextY);
-    // tryPickupPowerup();
+  if (e.repeat) return;
+  if (e.key === 'ArrowUp') keysDown.up = true;
+  else if (e.key === 'ArrowDown') keysDown.down = true;
+  else if (e.key === 'ArrowLeft') keysDown.left = true;
+  else if (e.key === 'ArrowRight') keysDown.right = true;
+  else if (e.code === 'Space') return placeBomb();
 });
 
 document.addEventListener('keyup', e => {
-    const b = state.getState().bomber;
-    if (e.key === 'ArrowUp') b.movingUp = false;
-    if (e.key === 'ArrowDown') b.movingDown = false;
-    if (e.key === 'ArrowLeft') b.movingLeft = false;
-    if (e.key === 'ArrowRight') b.movingRight = false;
+  if (e.key === 'ArrowUp') keysDown.up = false;
+  else if (e.key === 'ArrowDown') keysDown.down = false;
+  else if (e.key === 'ArrowLeft') keysDown.left = false;
+  else if (e.key === 'ArrowRight') keysDown.right = false;
 });
+
+function stepMovement() {
+  const now = performance.now();
+  if (now - lastMoveAt < MOVE_INTERVAL_MS) return;
+
+  const s = state.getState();
+  const { bomber, grid, mapWidth, mapHeight } = s;
+
+  let dx = 0, dy = 0;
+  if (keysDown.up)    { dy = -1; bomber.direction = 'up'; }
+  else if (keysDown.down)  { dy =  1; bomber.direction = 'down'; }
+  else if (keysDown.left)  { dx = -1; bomber.direction = 'left'; }
+  else if (keysDown.right) { dx =  1; bomber.direction = 'right'; }
+  else return; 
+
+  const nextX = bomber.x + dx;
+  const nextY = bomber.y + dy;
+
+  if (nextX < 0 || nextX >= mapWidth || nextY < 0 || nextY >= mapHeight) return;
+  const cell = grid[nextY][nextX];
+  if (cell === 1 || cell === 2) return;
+
+  bomber.x = nextX;
+  bomber.y = nextY;
+  lastMoveAt = now;
+
+  update();  
+  sendMovement(nextX, nextY);
+}
