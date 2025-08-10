@@ -85,31 +85,52 @@ function broadcast(type, payload) {
 }
 
 function explodeServerBomb(user, bx, by) {
-    const dir = [
-        [0, 0],
+    const dirs = [
         [1, 0],
         [-1, 0],
         [0, 1],
         [0, -1]
     ];
+    const range = Math.max(1, user?.stats?.flameRange ?? 1);
 
-    dir.forEach(([dx, dy]) => {
-        const fx = bx + dx;
-        const fy = by + dy;
-        if (fx < 0 || fx >= mapWidth || fy < 0 || fy >= mapHeight) return;
-        if (mapData[fy][fx] === 2) return;
+    maybeDestroyAndSpawn(bx, by);
 
-        if (mapData[fy][fx] === 1) {
-            mapData[fy][fx] = 0;
+  for (const [dx, dy] of dirs) {
+    for (let k = 1; k <= range; k++) {
+      const fx = bx + dx * k;
+      const fy = by + dy * k;
+      if (fx < 0 || fx >= mapWidth || fy < 0 || fy >= mapHeight) break;
 
-            if (Math.random() < 1.0) {
-                const pu = createPowerup({ type: 'bombs', x: fx, y: fy });
-                broadcast('powerup-spawn', {
-                    powerup: pu
-                });
-            }
-        }
-    })
+      const cell = mapData[fy][fx];
+      if (cell === 2) break;      
+
+      if (cell === 1) {  
+        mapData[fy][fx] = 0;
+        maybeSpawnPowerup(fx, fy);
+        break;
+      }
+    }
+  }
+}
+
+function maybeDestroyAndSpawn(x, y) {
+    if (mapData[y][x] === 1) {
+        mapData[y][x] = 0;
+        maybeSpawnPowerup(x, y);
+    }
+}
+
+function maybeSpawnPowerup(x, y) {
+    const roll = Math.random();
+    const type =
+    roll < 0.15 ? 'flames' :
+    roll < 0.30 ? 'bombs'  :
+    null;
+
+    if (!type) return;
+
+    const pu = createPowerup({ type, x, y });
+    broadcast('powerup-spawn', { powerup: pu });
 }
 
 wss.on('connection', (ws, req) => {
@@ -154,7 +175,10 @@ wss.on('connection', (ws, req) => {
                 x: null,
                 y: null,
                 color: getAvailableColor(),
-                stats: { maxBombs: 1 },
+                stats: { 
+                    maxBombs: 1,
+                    flameRange: 1,
+                 },
                 activeBombs: 0
             };
 
@@ -235,15 +259,24 @@ wss.on('connection', (ws, req) => {
             if (pu) {
                 const u = users[data.id];
                 if (pu.type === 'bombs') {
-                    u.stats.maxBombs += 1;
-                }
-                powerups.delete(pu.id);
-                broadcast('powerup-picked', {
+                 u.stats.maxBombs += 1;
+                 powerups.delete(pu.id);
+                 broadcast('powerup-picked', {
                     id: pu.id,
                     by: u.id,
-                    powerupType: pu.type,
+                    powerupType: 'bombs',
                     newMaxBombs: u.stats.maxBombs
                 });
+                } else if (pu.type === 'flames') {
+                    u.stats.flameRange = (u.stats?.flameRange || 1) + 1;
+                    powerups.delete(pu.id);
+                    broadcast('powerup-picked', {
+                        id: pu.id,
+                        by: u.id,
+                        powerupType: 'flames',
+                        newFlameRange: u.stats.flameRange
+                    });
+                }
             }
         }
 

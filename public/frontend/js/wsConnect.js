@@ -54,7 +54,7 @@ socket.addEventListener('message', event => {
 
         case 'bomb':
             console.log('[WS] Bomb placed at:', data.x, data.y);
-            bombCallback({ x: data.x, y: data.y });
+            bombCallback({ id: data.id, x: data.x, y: data.y });
             break;
 
         case 'powerup-spawn':
@@ -66,7 +66,8 @@ socket.addEventListener('message', event => {
                 id: data.id,
                 by: data.by,
                 type: data.powerupType,
-                newMaxBombs: data.newMaxBombs
+                newMaxBombs: data.newMaxBombs,
+                newFlameRange: data.newFlameRange
             });
             break;
 

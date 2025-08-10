@@ -34,6 +34,8 @@ const state = new StateManager({
         movingRight: false
     },
     remotePlayers: {},
+    remoteStats: {},
+
     grid: [],
     bombs: [],
     fires: [],
@@ -50,7 +52,7 @@ const state = new StateManager({
     heartContainer: null,
 
     powerups: [],
-    stats: { maxBombs: 1 },
+    stats: { maxBombs: 1, flameRange: 1 },
 });
 
 const view = new ViewRenderer('#game-root');
@@ -65,7 +67,7 @@ export function startGame(container) {
 
         state.setState({
             ...s,
-            bomber: {...s.bomber, x, y, color },
+            bomber: { ...s.bomber, x, y, color },
             bomberElement: null
         });
         sendMovement(x, y);
@@ -90,7 +92,7 @@ export function startGame(container) {
 
         state.setState(s => ({
             ...s,
-            bomber: {...s.bomber, x: spawnX, y: spawnY }
+            bomber: { ...s.bomber, x: spawnX, y: spawnY }
         }));
 
         sendStartGame();
@@ -104,7 +106,7 @@ export function startGame(container) {
 
     onPlayerDisconnect(id => {
         const s = state.getState();
-        const newRemotePlayers = {...s.remotePlayers };
+        const newRemotePlayers = { ...s.remotePlayers };
 
         const player = newRemotePlayers[id];
         if (player) {
@@ -118,12 +120,19 @@ export function startGame(container) {
         }
     });
 
-    onBombPlaced(({ x, y }) => {
+    onBombPlaced(({ id, x, y }) => {
         const s = state.getState();
+
+        const ownerId = id;
+        const isMine = ownerId === getClientId();
+        const ownerRange = isMine
+            ? (s.stats.flameRange || 1)
+            : (s.remoteStats[ownerId]?.flameRange || 1);
 
         const bomb = {
             x,
             y,
+            range: ownerRange,
             timer: 2000
         };
 
@@ -155,8 +164,10 @@ export function startGame(container) {
 
         const iconByType = {
             bombs: 'frontend/img/bombPlusOne.png',
+            flames: 'frontend/img/flamesPlusOne.png'
         };
         const iconUrl = iconByType[spawn.type] || 'frontend/img/bombPlusOne.png';
+
 
         const el = view.el('div', {
             className: `powerup powerup-${spawn.type}`,
@@ -175,11 +186,11 @@ export function startGame(container) {
         });
 
         container.appendChild(el);
-        const next = powerups.concat([{...spawn, element: el }]);
+        const next = powerups.concat([{ ...spawn, element: el }]);
         state.setState({ powerups: next });
     });
 
-    onPowerupPicked(({ id, by, type, newMaxBombs }) => {
+    onPowerupPicked(({ id, by, type, newMaxBombs, newFlameRange }) => {
         const s = state.getState();
         const puIndex = s.powerups.findIndex(p => p.id === id);
         if (puIndex !== -1) {
@@ -189,12 +200,23 @@ export function startGame(container) {
             state.setState({ powerups: next });
         }
 
-        if (by === getClientId() && type === 'bombs') {
-            state.setState({ stats: {...s.stats, maxBombs: newMaxBombs } });
+        if (by === getClientId()) {
+            if (type === 'bombs' && newMaxBombs != null) {
+                state.setState({ stats: { ...s.stats, maxBombs: newMaxBombs } });
+            }
+            if (type === 'flames' && newFlameRange != null) {
+                state.setState({ stats: { ...s.stats, flameRange: newFlameRange } });
+            }
+        } else {
+            const curr = s.remoteStats[by] || {};
+            const patch = { ...curr };
+            if (type === 'bombs' && newMaxBombs != null) patch.maxBombs = newMaxBombs;
+            if (type === 'flames' && newFlameRange != null) patch.flameRange = newFlameRange;
+            state.setState({ remoteStats: { ...s.remoteStats, [by]: patch } });
         }
     });
 
-    const loop = new GameLoop(update, () => {}, 60);
+    const loop = new GameLoop(update, () => { }, 60);
     loop.start();
 }
 
@@ -368,23 +390,9 @@ function explodeBomb(bomb) {
     const { gridSize, bombs, fires, grid, container, bomber } = s;
 
     bomb.element.remove();
-    s.bombs = bombs.filter(b => b !== bomb);
+    state.setState({ bombs: bombs.filter(b => b !== bomb) });
 
-    const directions = [
-        [0, 0],
-        [1, 0],
-        [-1, 0],
-        [0, 1],
-        [0, -1]
-    ];
-
-    directions.forEach(([dx, dy]) => {
-        const fx = bomb.x + dx;
-        const fy = bomb.y + dy;
-        if (fx < 0 || fx >= s.mapWidth || fy < 0 || fy >= s.mapHeight) return;
-        if (grid[fy][fx] === 2) return;
-        if (grid[fy][fx] === 1) grid[fy][fx] = 0;
-
+    const addFire = (fx, fy) => {
         const fire = view.el('div', {
             className: 'fire',
             style: {
@@ -407,7 +415,7 @@ function explodeBomb(bomb) {
             state.setState({
                 ...s,
                 lives: newLives,
-                bomber: {...bomber, x: 1, y: 1 }
+                bomber: { ...bomber, x: 1, y: 1 }
             });
             drawHearts();
             sendMovement(1, 1);
@@ -419,6 +427,36 @@ function explodeBomb(bomb) {
             state.setState({ fires: fires.filter(f => f !== fire) });
             drawWalls();
         }, 400);
+    };
+
+    addFire(bomb.x, bomb.y);
+
+    const directions = [
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1]
+    ];
+
+    const range = bomb.range || 1;
+
+    directions.forEach(([dx, dy]) => {
+        for (let r = 1; r <= range; r++) {
+            const fx = bomb.x + dx * r;
+            const fy = bomb.y + dy * r;
+
+            if (fx < 0 || fx >= s.mapWidth || fy < 0 || fy >= s.mapHeight) break;
+
+            if (grid[fy][fx] === 2) break;
+
+            if (grid[fy][fx] === 1) {
+                grid[fy][fx] = 0;
+                addFire(fx, fy);
+                break;
+            }
+
+            addFire(fx, fy);
+        }
     });
 }
 
