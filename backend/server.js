@@ -217,6 +217,7 @@ wss.on('connection', (ws, req) => {
 
             users[data.id].x = spawn.x;
             users[data.id].y = spawn.y;
+            users[data.id].spawn = { ...spawn };
             takenSpawns.set(data.id, spawn);
 
             const others = Object.values(users)
@@ -366,6 +367,25 @@ wss.on('connection', (ws, req) => {
             }
         }
 
+        if (data.type === 'respawn') {
+            const u = users[data.id];
+            if (!u || !u.spawn) return;
+
+            u.x = u.spawn.x;
+            u.y = u.spawn.y;
+            u.lastMoveAt = 0;
+
+            u.ws.send(JSON.stringify({
+                type: 'spawn-position',
+                id: u.id,
+                x: u.x,
+                y: u.y,
+                color: u.color
+            }));
+
+            broadcast('player-move', { id: u.id, x: u.x, y: u.y });
+            return;
+        }
 
         // if (data.type === 'pickup-powerup') {
         //     const u = users[data.id];
