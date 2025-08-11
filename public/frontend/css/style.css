@@ -12,6 +12,7 @@ body {
   align-items: center;
   justify-content: center;
   font-size: 25px;
+   position: relative;
 }
 
 /* Inherit font for all form elements */
@@ -57,4 +58,47 @@ h1 {
     font-weight: 50;
 }
 
+/*  */
 
+.page-wrapper {
+  display: flex;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  position: relative;
+}
+
+.lobby-content, .game-area {
+  flex: 3;
+  padding: 20px;
+  margin-right: 340px;
+  text-align: center;
+}
+
+.chat-container {
+  width: 320px; 
+  flex: 1;
+  padding: 10px;
+  /* background: #1c1c1c; */
+  height: 300px;
+  color: white;
+  /* border-left: 2px solid #333; */
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  margin-bottom: 10px;
+  font-size: 14px;
+}
+
+.chat-msg {
+  padding: 4px 0;
+  border-bottom: 1px solid #333;
+}
+
+/*  */
+
+.powerup { image-rendering: pixelated; }

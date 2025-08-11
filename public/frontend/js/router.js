@@ -1,5 +1,5 @@
 import { StateManager, Router, ViewRenderer } from './mini-framework.js';
-import { sendUsername, onUserListUpdate } from './wsConnect.js';
+import { sendUsername, onUserListUpdate, getClientId } from './wsConnect.js';
 
 const app = document.createElement('div');
 app.id = 'app';
@@ -10,6 +10,7 @@ const stateManager = new StateManager({
   playerName: '',
   users: [],
   countdown: null,
+  userRegistered: false,
   routePermission: {
     lobby: false,
     play: false
@@ -20,6 +21,8 @@ const view = new ViewRenderer('#app');
 
 const renderApp = (state, el) => {
   const path = window.location.hash.slice(1) || '';
+
+  console.log('Current route:', path, 'User registered:', state.userRegistered);
 
   if (path === '') return renderNameForm(stateManager, el);
 
@@ -71,8 +74,14 @@ function renderNameForm(sm, el) {
           playerName: name,
           routePermission: { lobby: true, play: false }
         });
+
+        const id = getClientId();
+        console.log('Registering user:', name, 'with ID:', id);
+
+        sm.setState({ userRegistered: true });
+
         localStorage.setItem('playerName', name);
-        sendUsername(name);
+        sendUsername(name, id);
         window.location.hash = '#lobby';
       },
       style: {
@@ -83,7 +92,6 @@ function renderNameForm(sm, el) {
     }, 'Enter Lobby')
   );
 }
-
 
 function renderLobby(sm, el) {
   const state = sm.getState();
@@ -114,25 +122,44 @@ function renderLobby(sm, el) {
     }
   });
 
-  return el('div', {},
-    el('h1', {}, 'Lobby'),
-    el('p', {}, 'Welcome, ', el('strong', {}, state.playerName)),
-    el('h1', {}, 'Connected Players:'),
-    el('ul', {},
-      state.users.map(u =>
-        el('li', {}, `${u.name} (${u.status}) - ${u.color}`)
-      )
+  setTimeout(() => {
+    const chatRoot = document.getElementById('chat-root');
+    if (chatRoot) {
+      import('./chat.js').then(mod => mod.initChat('#chat-root', 'lobby'));
+    }
+  }, 0);
+
+  return el('div', { className: 'page-wrapper' },
+    el('div', { className: 'lobby-content' },
+      el('h1', {}, 'Lobby'),
+      el('p', {}, 'Welcome, ', el('strong', {}, state.playerName)),
+      el('h1', {}, 'Connected Players:'),
+      el('ul', {},
+        state.users.map(u =>
+          el('li', {
+            style: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }
+          },
+            el('img', {
+              src: `frontend/img/${u.color || 'blue'}/front.png`,
+              alt: u.color || 'player',
+              style: { width: '24px', height: '24px', imageRendering: 'pixelated' }
+            }),
+            el('span', {}, `${u.name} (${u.status})`)
+          )
+        )
+      ),
+      el('p', {}, state.countdown != null ? `Game starting in ${state.countdown}...` : ''),
+      el('button', {
+        onclick: () => {
+          sm.setState(s => ({
+            ...s,
+            routePermission: { ...s.routePermission, play: true }
+          }));
+          window.location.hash = '#play';
+        }
+      }, 'Start Game'),
     ),
-    el('p', {}, state.countdown != null ? `Game starting in ${state.countdown}...` : ''),
-    el('button', {
-      onclick: () => {
-        sm.setState(s => ({
-          ...s,
-          routePermission: { ...s.routePermission, play: true }
-        }));
-        window.location.hash = '#play';
-      }
-    }, 'Start Game')
+    el('aside', { id: 'chat-root', className: 'chat-container' })
   );
 }
 
@@ -144,10 +171,14 @@ function renderPlay(sm, el) {
         mod.startGame(container);
       });
     }
+
+    const chatRoot = document.getElementById('chat-root');
+    if (chatRoot) import('./chat.js').then(mod => mod.initChat('#chat-root', 'game'));
   }, 0);
 
-  return el('div', {},
-    el('div', { id: 'game-root' })
+  return el('div', { className: 'page-wrapper' },
+    el('div', { id: 'game-root' }),
+    el('div', { id: 'chat-root', className: 'chat-container' })
   );
 }
 
