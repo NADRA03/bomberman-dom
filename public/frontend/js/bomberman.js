@@ -15,7 +15,7 @@ import {
     sendStartGame,
     onPowerupSpawn,
     onPowerupPicked,
-    // sendPickupPowerup
+    sendPickupPowerup
 } from './wsConnect.js';
 
 import { StateManager, ViewRenderer, GameLoop } from './mini-framework.js';
@@ -52,7 +52,7 @@ const state = new StateManager({
     heartContainer: null,
 
     powerups: [],
-    stats: { maxBombs: 1, flameRange: 1 },
+    stats: { maxBombs: 1, flameRange: 1, moveIntervalMs: 120, speedLevel: 0 },
 });
 
 const view = new ViewRenderer('#game-root');
@@ -164,7 +164,8 @@ export function startGame(container) {
 
         const iconByType = {
             bombs: 'frontend/img/bombPlusOne.png',
-            flames: 'frontend/img/flamesPlusOne.png'
+            flames: 'frontend/img/flamesPlusOne.png',
+            speed: 'frontend/img/speedUp.png'
         };
         const iconUrl = iconByType[spawn.type] || 'frontend/img/bombPlusOne.png';
 
@@ -190,7 +191,7 @@ export function startGame(container) {
         state.setState({ powerups: next });
     });
 
-    onPowerupPicked(({ id, by, type, newMaxBombs, newFlameRange }) => {
+    onPowerupPicked(({ id, by, type, newMaxBombs, newFlameRange, newMoveIntervalMs, newSpeedLevel }) => {
         const s = state.getState();
         const puIndex = s.powerups.findIndex(p => p.id === id);
         if (puIndex !== -1) {
@@ -207,27 +208,30 @@ export function startGame(container) {
             if (type === 'flames' && newFlameRange != null) {
                 state.setState({ stats: { ...s.stats, flameRange: newFlameRange } });
             }
+            if (type === 'speed' && newMoveIntervalMs != null) {
+                state.setState({ stats: { ...s.stats, moveIntervalMs: newMoveIntervalMs, speedLevel: newSpeedLevel ?? s.stats.speedLevel } });
+            }
         } else {
             const curr = s.remoteStats[by] || {};
             const patch = { ...curr };
             if (type === 'bombs' && newMaxBombs != null) patch.maxBombs = newMaxBombs;
             if (type === 'flames' && newFlameRange != null) patch.flameRange = newFlameRange;
+            if (type === 'speed' && newMoveIntervalMs != null) patch.moveIntervalMs = newMoveIntervalMs, patch.speedLevel = newSpeedLevel ?? curr.speedLevel;
             state.setState({ remoteStats: { ...s.remoteStats, [by]: patch } });
         }
     });
 
     const loop = new GameLoop(() => {
-    stepMovement();
-    update();
-    }, () => {}, 60);
+        stepMovement();
+        update();
+    }, () => { }, 60);
 
     loop.start();
 }
 
-const MOVE_INTERVAL_MS = 120;
-
-let keysDown = { up:false, down:false, left:false, right:false };
-let lastMoveAt = 0;
+function spritePath(color, pose) {
+    return `frontend/img/${color}/${pose}.png`;
+}
 
 function drawHearts() {
     const s = state.getState();
@@ -287,18 +291,19 @@ function update() {
     const el = s.bomberElement;
     el.style.left = `${bomber.x * gridSize}px`;
     el.style.top = `${bomber.y * gridSize}px`;
+    el.style.backgroundImage = `url('${spritePath(color, 'front')}')`;
 
     if (bomber.direction === 'up') {
-        el.style.backgroundImage = `url('frontend/img/${color}/b-back.png')`;
+        el.style.backgroundImage = `url('${spritePath(color, 'back')}')`;
         el.style.transform = 'scaleX(1)';
     } else if (bomber.direction === 'down') {
-        el.style.backgroundImage = `url('frontend/img/${color}/b-front.png')`;
+        el.style.backgroundImage = `url('${spritePath(color, 'front')}')`;
         el.style.transform = 'scaleX(1)';
     } else if (bomber.direction === 'right') {
-        el.style.backgroundImage = `url('frontend/img/${color}/b-side.png')`;
+        el.style.backgroundImage = `url('${spritePath(color, 'side')}')`;
         el.style.transform = 'scaleX(-1)';
     } else if (bomber.direction === 'left') {
-        el.style.backgroundImage = `url('frontend/img/${color}/b-side.png')`;
+        el.style.backgroundImage = `url('${spritePath(color, 'side')}')`;
         el.style.transform = 'scaleX(1)';
     }
 }
@@ -315,7 +320,7 @@ function renderRemotePlayer({ id, x, y, color = 'blue' }) {
                 position: 'absolute',
                 width: `${s.gridSize}px`,
                 height: `${s.gridSize}px`,
-                backgroundImage: `url('frontend/img/${color}/b-front.png')`,
+                backgroundImage: `url('${spritePath(color, 'front')}')`,
                 backgroundSize: `${s.gridSize}px ${s.gridSize}px`,
                 imageRendering: 'pixelated',
                 backgroundRepeat: 'no-repeat',
@@ -348,17 +353,18 @@ function renderRemotePlayer({ id, x, y, color = 'blue' }) {
 
     const folder = player.color || 'blue';
 
+    const c = player.color || 'blue';
     if (player.direction === 'up') {
-        el.style.backgroundImage = `url('frontend/img/${folder}/b-back.png')`;
+        el.style.backgroundImage = `url('${spritePath(c, 'back')}')`;
         el.style.transform = 'scaleX(1)';
     } else if (player.direction === 'down') {
-        el.style.backgroundImage = `url('frontend/img/${folder}/b-front.png')`;
+        el.style.backgroundImage = `url('${spritePath(c, 'front')}')`;
         el.style.transform = 'scaleX(1)';
     } else if (player.direction === 'right') {
-        el.style.backgroundImage = `url('frontend/img/${folder}/b-side.png')`;
+        el.style.backgroundImage = `url('${spritePath(c, 'side')}')`;
         el.style.transform = 'scaleX(-1)';
     } else if (player.direction === 'left') {
-        el.style.backgroundImage = `url('frontend/img/${folder}/b-side.png')`;
+        el.style.backgroundImage = `url('${spritePath(c, 'side')}')`;
         el.style.transform = 'scaleX(1)';
     }
 }
@@ -478,47 +484,63 @@ function tryPickupPowerup() {
     sendPickupPowerup(pu.id);
 }
 
+// bomber.x = nextX; bomber.y = nextY;
+// update(); sendMovement(nextX, nextY);
+// tryPickupPowerup();
+
 document.addEventListener('keydown', e => {
-  if (e.repeat) return;
-  if (e.key === 'ArrowUp') keysDown.up = true;
-  else if (e.key === 'ArrowDown') keysDown.down = true;
-  else if (e.key === 'ArrowLeft') keysDown.left = true;
-  else if (e.key === 'ArrowRight') keysDown.right = true;
-  else if (e.code === 'Space') return placeBomb();
+    if (e.repeat) return;
+    if (e.key === 'ArrowUp') keysDown.up = true;
+    else if (e.key === 'ArrowDown') keysDown.down = true;
+    else if (e.key === 'ArrowLeft') keysDown.left = true;
+    else if (e.key === 'ArrowRight') keysDown.right = true;
+    else if (e.code === 'Space') return placeBomb();
 });
 
 document.addEventListener('keyup', e => {
-  if (e.key === 'ArrowUp') keysDown.up = false;
-  else if (e.key === 'ArrowDown') keysDown.down = false;
-  else if (e.key === 'ArrowLeft') keysDown.left = false;
-  else if (e.key === 'ArrowRight') keysDown.right = false;
+    if (e.key === 'ArrowUp') keysDown.up = false;
+    else if (e.key === 'ArrowDown') keysDown.down = false;
+    else if (e.key === 'ArrowLeft') keysDown.left = false;
+    else if (e.key === 'ArrowRight') keysDown.right = false;
 });
 
+// const MOVE_INTERVAL_MS = 120;
+
+let keysDown = { up: false, down: false, left: false, right: false };
+let lastMoveAt = 0;
+
 function stepMovement() {
-  const now = performance.now();
-  if (now - lastMoveAt < MOVE_INTERVAL_MS) return;
+    // const now = performance.now();
+    // if (now - lastMoveAt < MOVE_INTERVAL_MS) return;
 
-  const s = state.getState();
-  const { bomber, grid, mapWidth, mapHeight } = s;
+    // const s = state.getState();
 
-  let dx = 0, dy = 0;
-  if (keysDown.up)    { dy = -1; bomber.direction = 'up'; }
-  else if (keysDown.down)  { dy =  1; bomber.direction = 'down'; }
-  else if (keysDown.left)  { dx = -1; bomber.direction = 'left'; }
-  else if (keysDown.right) { dx =  1; bomber.direction = 'right'; }
-  else return; 
+    const now = performance.now();
 
-  const nextX = bomber.x + dx;
-  const nextY = bomber.y + dy;
+    const s = state.getState();
+    const interval = s.stats?.moveIntervalMs ?? 120;
+    if (now - lastMoveAt < interval) return;
+    const { bomber, grid, mapWidth, mapHeight } = s;
 
-  if (nextX < 0 || nextX >= mapWidth || nextY < 0 || nextY >= mapHeight) return;
-  const cell = grid[nextY][nextX];
-  if (cell === 1 || cell === 2) return;
+    let dx = 0, dy = 0;
+    if (keysDown.up) { dy = -1; bomber.direction = 'up'; }
+    else if (keysDown.down) { dy = 1; bomber.direction = 'down'; }
+    else if (keysDown.left) { dx = -1; bomber.direction = 'left'; }
+    else if (keysDown.right) { dx = 1; bomber.direction = 'right'; }
+    else return;
 
-  bomber.x = nextX;
-  bomber.y = nextY;
-  lastMoveAt = now;
+    const nextX = bomber.x + dx;
+    const nextY = bomber.y + dy;
 
-  update();  
-  sendMovement(nextX, nextY);
+    if (nextX < 0 || nextX >= mapWidth || nextY < 0 || nextY >= mapHeight) return;
+    const cell = grid[nextY][nextX];
+    if (cell === 1 || cell === 2) return;
+
+    bomber.x = nextX;
+    bomber.y = nextY;
+    lastMoveAt = now;
+
+    update();
+    sendMovement(nextX, nextY);
+    tryPickupPowerup();
 }
