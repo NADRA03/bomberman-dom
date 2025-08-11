@@ -24,7 +24,7 @@ const renderApp = (state, el) => {
 
   console.log('Current route:', path, 'User registered:', state.userRegistered);
 
-  if (path === '') return renderNameForm(stateManager, el);  
+  if (path === '') return renderNameForm(stateManager, el);
 
   if (path === 'lobby') {
     if (state.routePermission.lobby || state.devMode) return renderLobby(stateManager, el);
@@ -131,25 +131,34 @@ function renderLobby(sm, el) {
 
   return el('div', { className: 'page-wrapper' },
     el('div', { className: 'lobby-content' },
-    el('h1', {}, 'Lobby'),
-    el('p', {}, 'Welcome, ', el('strong', {}, state.playerName)),
-    el('h1', {}, 'Connected Players:'),
-    el('ul', {},
-      state.users.map(u =>
-        el('li', {}, `${u.name} (${u.status}) - ${u.color}`)
-      )
+      el('h1', {}, 'Lobby'),
+      el('p', {}, 'Welcome, ', el('strong', {}, state.playerName)),
+      el('h1', {}, 'Connected Players:'),
+      el('ul', {},
+        state.users.map(u =>
+          el('li', {
+            style: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }
+          },
+            el('img', {
+              src: `frontend/img/${u.color || 'blue'}/front.png`,
+              alt: u.color || 'player',
+              style: { width: '24px', height: '24px', imageRendering: 'pixelated' }
+            }),
+            el('span', {}, `${u.name} (${u.status})`)
+          )
+        )
+      ),
+      el('p', {}, state.countdown != null ? `Game starting in ${state.countdown}...` : ''),
+      el('button', {
+        onclick: () => {
+          sm.setState(s => ({
+            ...s,
+            routePermission: { ...s.routePermission, play: true }
+          }));
+          window.location.hash = '#play';
+        }
+      }, 'Start Game'),
     ),
-    el('p', {}, state.countdown != null ? `Game starting in ${state.countdown}...` : ''),
-    el('button', {
-      onclick: () => {
-        sm.setState(s => ({
-          ...s,
-          routePermission: { ...s.routePermission, play: true }
-        }));
-        window.location.hash = '#play';
-      }
-    }, 'Start Game'),
-  ),
     el('aside', { id: 'chat-root', className: 'chat-container' })
   );
 }

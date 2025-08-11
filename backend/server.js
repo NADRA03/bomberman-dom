@@ -27,7 +27,7 @@ const spawnPoints = [
     { x: 13, y: 11 }
 ];
 
-const availableColors = ['blue', 'yellow', 'brown', 'grey'];
+const availableColors = ['blue', 'brown', 'grey', 'yellow'];
 
 function createPowerup({ type, x, y }) {
     const id = String(nextPowerupId++);
