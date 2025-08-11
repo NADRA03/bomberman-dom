@@ -125,7 +125,8 @@ function maybeSpawnPowerup(x, y) {
     const type =
         roll < 0.15 ? 'flames' :
             roll < 0.30 ? 'bombs' :
-                null;
+                roll < 0.45 ? 'speed' :
+                    null;
 
     if (!type) return;
 
@@ -178,6 +179,8 @@ wss.on('connection', (ws, req) => {
                 stats: {
                     maxBombs: 1,
                     flameRange: 1,
+                    moveIntervalMs: 100,
+                    speedLevel: 0
                 },
                 activeBombs: 0,
                 lastMoveAt: 0,
@@ -242,7 +245,7 @@ wss.on('connection', (ws, req) => {
             if (!u) return;
 
             const now = Date.now();
-            const MOVE_INTERVAL_MS = 100;
+            const MOVE_INTERVAL_MS = u.stats?.moveIntervalMs ?? 100;
             if (u.lastMoveAt && now - u.lastMoveAt < MOVE_INTERVAL_MS) {
                 return;
             }
@@ -250,7 +253,7 @@ wss.on('connection', (ws, req) => {
 
             const dx = Math.abs((data.x ?? u.x) - (u.x ?? 0));
             const dy = Math.abs((data.y ?? u.y) - (u.y ?? 0));
-            if (dx + dy !== 1) return;   
+            if (dx + dy !== 1) return;
             if (data.x < 0 || data.x >= mapWidth || data.y < 0 || data.y >= mapHeight) return;
             if (mapData[data.y][data.x] === 1 || mapData[data.y][data.x] === 2) return;
 
@@ -286,6 +289,19 @@ wss.on('connection', (ws, req) => {
                         by: u.id,
                         powerupType: 'flames',
                         newFlameRange: u.stats.flameRange
+                    });
+                } else if (pu.type === 'speed') {
+                    const current = u.stats.moveIntervalMs ?? 120;
+                    const next = Math.max(30, current - 50);   
+                    u.stats.moveIntervalMs = next;
+                    u.stats.speedLevel = (u.stats.speedLevel || 0) + 1;
+                    powerups.delete(pu.id);
+                    broadcast('powerup-picked', {
+                        id: pu.id,
+                        by: u.id,
+                        powerupType: 'speed',
+                        newMoveIntervalMs: next,
+                        newSpeedLevel: u.stats.speedLevel
                     });
                 }
             }
