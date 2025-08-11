@@ -131,6 +131,12 @@ function maybeSpawnPowerup(x, y) {
     if (!type) return;
 
     const pu = createPowerup({ type, x, y });
+
+    const occupant = Object.values(users).find(u => u.x === x && u.y === y);
+    if (occupant) {
+        return;
+    }
+
     broadcast('powerup-spawn', { powerup: pu });
 }
 
@@ -270,41 +276,41 @@ wss.on('connection', (ws, req) => {
                 if (client.readyState === ws.OPEN) client.send(moveData);
             });
 
-            const pu = [...powerups.values()].find(p => p.x === data.x && p.y === data.y);
-            if (pu) {
-                if (pu.type === 'bombs') {
-                    u.stats.maxBombs += 1;
-                    powerups.delete(pu.id);
-                    broadcast('powerup-picked', {
-                        id: pu.id,
-                        by: u.id,
-                        powerupType: 'bombs',
-                        newMaxBombs: u.stats.maxBombs
-                    });
-                } else if (pu.type === 'flames') {
-                    u.stats.flameRange = (u.stats?.flameRange || 1) + 1;
-                    powerups.delete(pu.id);
-                    broadcast('powerup-picked', {
-                        id: pu.id,
-                        by: u.id,
-                        powerupType: 'flames',
-                        newFlameRange: u.stats.flameRange
-                    });
-                } else if (pu.type === 'speed') {
-                    const current = u.stats.moveIntervalMs ?? 120;
-                    const next = Math.max(30, current - 50);   
-                    u.stats.moveIntervalMs = next;
-                    u.stats.speedLevel = (u.stats.speedLevel || 0) + 1;
-                    powerups.delete(pu.id);
-                    broadcast('powerup-picked', {
-                        id: pu.id,
-                        by: u.id,
-                        powerupType: 'speed',
-                        newMoveIntervalMs: next,
-                        newSpeedLevel: u.stats.speedLevel
-                    });
-                }
-            }
+            // const pu = [...powerups.values()].find(p => p.x === data.x && p.y === data.y);
+            // if (pu) {
+            //     if (pu.type === 'bombs') {
+            //         u.stats.maxBombs += 1;
+            //         powerups.delete(pu.id);
+            //         broadcast('powerup-picked', {
+            //             id: pu.id,
+            //             by: u.id,
+            //             powerupType: 'bombs',
+            //             newMaxBombs: u.stats.maxBombs
+            //         });
+            //     } else if (pu.type === 'flames') {
+            //         u.stats.flameRange = (u.stats?.flameRange || 1) + 1;
+            //         powerups.delete(pu.id);
+            //         broadcast('powerup-picked', {
+            //             id: pu.id,
+            //             by: u.id,
+            //             powerupType: 'flames',
+            //             newFlameRange: u.stats.flameRange
+            //         });
+            //     } else if (pu.type === 'speed') {
+            //         const current = u.stats.moveIntervalMs ?? 120;
+            //         const next = Math.max(30, current - 50);
+            //         u.stats.moveIntervalMs = next;
+            //         u.stats.speedLevel = (u.stats.speedLevel || 0) + 1;
+            //         powerups.delete(pu.id);
+            //         broadcast('powerup-picked', {
+            //             id: pu.id,
+            //             by: u.id,
+            //             powerupType: 'speed',
+            //             newMoveIntervalMs: next,
+            //             newSpeedLevel: u.stats.speedLevel
+            //         });
+            //     }
+            // }
         }
 
         if (data.type === 'bomb') {
@@ -333,6 +339,33 @@ wss.on('connection', (ws, req) => {
                 }
             }, 2000);
         }
+
+        if (data.type === 'pickup-powerup') {
+            const u = users[data.id];
+            if (!u) return;
+            const pu = powerups.get(data.powerupId);
+            if (!pu) return;
+            if (u.x !== pu.x || u.y !== pu.y) return;  // must be on the tile
+
+            // award based on type
+            if (pu.type === 'bombs') {
+                u.stats.maxBombs += 1;
+                powerups.delete(pu.id);
+                broadcast('powerup-picked', { id: pu.id, by: u.id, powerupType: 'bombs', newMaxBombs: u.stats.maxBombs });
+            } else if (pu.type === 'flames') {
+                u.stats.flameRange = (u.stats.flameRange || 1) + 1;
+                powerups.delete(pu.id);
+                broadcast('powerup-picked', { id: pu.id, by: u.id, powerupType: 'flames', newFlameRange: u.stats.flameRange });
+            } else if (pu.type === 'speed') {
+                const current = u.stats.moveIntervalMs ?? 120;
+                const next = Math.max(30, current - 50);
+                u.stats.moveIntervalMs = next;
+                u.stats.speedLevel = (u.stats.speedLevel || 0) + 1;
+                powerups.delete(pu.id);
+                broadcast('powerup-picked', { id: pu.id, by: u.id, powerupType: 'speed', newMoveIntervalMs: next, newSpeedLevel: u.stats.speedLevel });
+            }
+        }
+
 
         // if (data.type === 'pickup-powerup') {
         //     const u = users[data.id];
