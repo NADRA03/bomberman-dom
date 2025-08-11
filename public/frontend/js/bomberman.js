@@ -15,7 +15,8 @@ import {
     sendStartGame,
     onPowerupSpawn,
     onPowerupPicked,
-    sendPickupPowerup
+    sendPickupPowerup,
+    sendRespawn
 } from './wsConnect.js';
 
 import { StateManager, ViewRenderer, GameLoop } from './mini-framework.js';
@@ -33,6 +34,7 @@ const state = new StateManager({
         movingLeft: false,
         movingRight: false
     },
+    mySpawn: null,
     remotePlayers: {},
     remoteStats: {},
 
@@ -68,9 +70,9 @@ export function startGame(container) {
         state.setState({
             ...s,
             bomber: { ...s.bomber, x, y, color },
+            mySpawn: { x, y },   
             bomberElement: null
         });
-        sendMovement(x, y);
         update();
     });
 
@@ -427,14 +429,13 @@ function explodeBomb(bomb) {
 
         if (bomber.x === fx && bomber.y === fy && s.lives > 0) {
             const newLives = s.lives - 1;
+
             state.setState({
                 ...s,
                 lives: newLives,
-                bomber: { ...bomber, x: 1, y: 1 }
             });
             drawHearts();
-            sendMovement(1, 1);
-            update();
+            sendRespawn();
         }
 
         setTimeout(() => {

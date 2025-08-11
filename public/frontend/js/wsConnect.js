@@ -202,6 +202,14 @@ export function sendPickupPowerup(powerupId) {
   }
 }
 
+export function requestMap() {
+    const payload = { type: 'request-map' };
+
+    const send = () => socket.send(JSON.stringify(payload));
+    if (socket.readyState === WebSocket.OPEN) send();
+    else socket.addEventListener('open', send, { once: true });
+}
+
 export function sendChatMessage({ id, room, text }) {
     const payload = {
         type: 'chat-message',
@@ -216,10 +224,7 @@ export function sendChatMessage({ id, room, text }) {
     }
 }
 
-export function requestMap() {
-    const payload = { type: 'request-map' };
-
-    const send = () => socket.send(JSON.stringify(payload));
-    if (socket.readyState === WebSocket.OPEN) send();
-    else socket.addEventListener('open', send, { once: true });
+export function sendRespawn() {
+  const payload = { type: 'respawn', id: clientId };
+  if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(payload));
 }
