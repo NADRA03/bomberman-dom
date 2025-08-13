@@ -1,20 +1,20 @@
-const clientId = sessionStorage.getItem('clientId') || crypto.randomUUID();
+const clientId = sessionStorage.getItem('clientId') || 'id-' + Date.now() + '-' + Math.floor(Math.random() * 1e9);
 sessionStorage.setItem('clientId', clientId);
 
 document.cookie = `player_id=${clientId}; path=/`;
 
 export const socket = new WebSocket(`ws://${location.host}`);
 
-let userListCallback = () => {};
-let movementCallback = () => {};
-let spawnCallback = () => {};
-let existingPlayersCallback = () => {};
-let otherSpawnCallback = () => {};
-let mapCallback = () => {};
-let bombCallback = () => {};
+let userListCallback = () => { };
+let movementCallback = () => { };
+let spawnCallback = () => { };
+let existingPlayersCallback = () => { };
+let otherSpawnCallback = () => { };
+let mapCallback = () => { };
+let bombCallback = () => { };
 
-let powerupSpawnCallback = () => {};
-let powerupPickedCallback = () => {};
+let powerupSpawnCallback = () => { };
+let powerupPickedCallback = () => { };
 let chatCallback = null;
 
 // --- Updated for multiple disconnect callbacks ---

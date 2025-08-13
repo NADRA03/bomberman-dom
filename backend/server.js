@@ -140,6 +140,14 @@ function maybeSpawnPowerup(x, y) {
 }
 
 wss.on('connection', (ws, req) => {
+    const ra = req.socket.remoteAddress || '';
+    const ip = ra.startsWith('::ffff:') ? ra.replace('::ffff:', '') : ra;
+
+    if (!ip.startsWith('10.1.204.')) {
+        ws.close(1008, 'Forbidden');
+        return;
+    }
+
     const cookies = cookie.parse(req.headers.cookie || '');
     const playerId = cookies.player_id;
 
@@ -385,5 +393,5 @@ app.use(express.static(path.join(__dirname, '../public')));
 
 const PORT = 8000;
 server.listen(PORT, () => {
-    console.log(`✅ HTTP + WS server running at http://localhost:${PORT}`);
+    console.log(`✅ HTTP + WS server running at http://10.1.204.193:${PORT}`);
 });
