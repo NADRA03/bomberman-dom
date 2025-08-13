@@ -191,16 +191,22 @@ function renderNameForm(sm, el) {
 function renderLobby(sm, el) {
   const state = sm.getState();
 
-  let waitTimer = null;       // 20-second wait timer
-  let readyTimer = null;      // 10-second ready countdown
+  let waitTimer = null;       
+  let readyTimer = null;      
 
-  onUserListUpdate(users => {
-    sm.setState({ users });
-    const numPlayers = users.length;
+  function refreshUserList(users) {
+    // Remove disconnected users
+    const activeUsers = users.filter(u => !u.disconnected);
+
+    sm.setState({ users: activeUsers });
+
+    // Update user counter
+    const counterEl = document.getElementById('user-counter');
+    if (counterEl) counterEl.textContent = `Players connected: ${activeUsers.length}`;
 
     // 2-3 players: start 20-second wait timer if not running
-    if (numPlayers >= 2 && numPlayers < 4 && waitTimer == null && readyTimer == null) {
-      let waitSeconds = 3;  /////////////////////////developer
+    if (activeUsers.length >= 2 && activeUsers.length < 4 && waitTimer == null && readyTimer == null) {
+      let waitSeconds = 3;  // developer
       updateCountdown(waitSeconds, 'Waiting for more players...');
       waitTimer = setInterval(() => {
         waitSeconds--;
@@ -214,7 +220,7 @@ function renderLobby(sm, el) {
     }
 
     // 4 players: skip wait, start ready countdown immediately
-    if (numPlayers === 4 && readyTimer == null) {
+    if (activeUsers.length === 4 && readyTimer == null) {
       if (waitTimer) {
         clearInterval(waitTimer);
         waitTimer = null;
@@ -223,15 +229,30 @@ function renderLobby(sm, el) {
     }
 
     // Reset if players < 2
-    if (numPlayers < 2) {
+    if (activeUsers.length < 2) {
       if (waitTimer) { clearInterval(waitTimer); waitTimer = null; }
       if (readyTimer) { clearInterval(readyTimer); readyTimer = null; }
       updateCountdown(null);
     }
+  }
+
+  onUserListUpdate(refreshUserList);
+
+  onPlayerDisconnect(id => {
+    const s = sm.getState();
+    if (!Array.isArray(s.users)) return;
+
+    // Remove the disconnected player
+    const updatedUsers = s.users.filter(u => u.id !== id);
+
+    sm.setState({ users: updatedUsers });
+    console.log('Player disconnected:', id, 'Updated users:', updatedUsers);
+
+    refreshUserList(updatedUsers);
   });
 
   function startReadyCountdown() {
-    let countdown = 3;    /////////////////////////developer
+    let countdown = 3; 
     updateCountdown(countdown, 'Get ready!');
     readyTimer = setInterval(() => {
       countdown--;
@@ -264,93 +285,98 @@ function renderLobby(sm, el) {
     style: { display: 'flex', width: '100%', maxWidth: '1200px', margin: '0 auto', height: '100vh', position: 'relative' }
   },
 
-  el('h1', {
-    style: {
-      margin: 0,
-      position: 'absolute',
-      color: 'yellow',
-      fontSize: '100px',
-      top: '20px',
-      left: '50%',
-      transform: 'translateX(-50%)',
-      opacity: 0.7,
-      pointerEvents: 'none',
-      zIndex: 2,
-      userSelect: 'none',
-      textShadow: '2px 2px 4px rgba(0,0,0,1)'
-    }
-  }, 'BOMBERMEN'),
+    el('h1', {
+      style: {
+        margin: 0,
+        position: 'absolute',
+        color: 'yellow',
+        fontSize: '100px',
+        top: '20px',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        opacity: 0.7,
+        pointerEvents: 'none',
+        zIndex: 2,
+        userSelect: 'none',
+        textShadow: '2px 2px 4px rgba(0,0,0,1)'
+      }
+    }, 'BOMBERMEN'),
 
-  el('div', {
-    className: 'lobby-content',
-    style: {
-      flex: 3,
-      padding: '40px 20px',
-      marginRight: '340px',
-      textAlign: 'center',
-      justifyContent: 'center',
-      position: 'relative',
-      overflow: 'visible',
-      backgroundColor: '#000',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      height: '100vh'
-    }
-  },
+    el('div', {
+      className: 'lobby-content',
+      style: {
+        flex: 3,
+        padding: '40px 20px',
+        marginRight: '340px',
+        textAlign: 'center',
+        justifyContent: 'center',
+        position: 'relative',
+        overflow: 'visible',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: '100vh'
+      }
+    },
 
-  el('div', {
-    style: {
-      position: 'absolute',
-      top: '-100px',
-      left: '-100px',
-      right: '-100px',
-      bottom: '-100px',
-      backgroundImage: 'url("./frontend/img/bg.png")',
-      backgroundSize: 'contain',
-      backgroundRepeat: 'no-repeat',
-      backgroundPosition: 'center',
-      opacity: 0.5,
-      pointerEvents: 'none',
-      zIndex: 0
-    }
-  }),
+      el('div', {
+        style: {
+          position: 'absolute',
+          top: '-100px',
+          left: '-100px',
+          right: '-100px',
+          bottom: '-100px',
+          backgroundImage: 'url("./frontend/img/bg.png")',
+          backgroundSize: 'contain',
+          backgroundRepeat: 'no-repeat',
+          backgroundPosition: 'center',
+          opacity: 0.5,
+          pointerEvents: 'none',
+          zIndex: 0
+        }
+      }),
 
-  el('div', { style: { position: 'relative', zIndex: 1 } },
-    el('h1', {}, 'Connected Players:'),
-    el('ul', {},
-      state.users.map(u =>
-        el('li', { style: { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' } },
-          el('img', {
-            src: `frontend/img/${u.color || 'blue'}/front.png`,
-            alt: u.color || 'player',
-            style: { width: '50px', height: '50px', imageRendering: 'pixelated' }
-          }),
-          el('span', {}, `${u.name} (${u.status})`)
-        )
+      el('div', { style: { position: 'relative', zIndex: 1 } },
+        el('h1', {}, 'Connected Players:'),
+
+        // Live user counter
+        el('p', { id: 'user-counter', style: { fontSize: '1.2rem', color: 'yellow', marginBottom: '10px' } },
+          `Players connected: ${state.users.length}`
+        ),
+
+        el('ul', {},
+          state.users.map(u =>
+            el('li', { style: { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' } },
+              el('img', {
+                src: `frontend/img/${u.color || 'blue'}/front.png`,
+                alt: u.color || 'player',
+                style: { width: '50px', height: '50px', imageRendering: 'pixelated' }
+              }),
+              el('span', {}, `${u.name} (${u.status})`)
+            )
+          )
+        ),
+        el('p', { id: 'countdown-text' }, '')
       )
     ),
-    el('p', { id: 'countdown-text' }, '')
-  )),
 
-  el('aside', {
-    id: 'chat-root',
-    className: 'chat-container',
-    style: {
-      flex: 1,
-      padding: '10px',
-      color: '#fff',
-      display: 'flex',
-      flexDirection: 'column',
-      justifyContent: 'center',
-      height: '100vh',
-      boxSizing: 'border-box'
-    }
-  })
+    el('aside', {
+      id: 'chat-root',
+      className: 'chat-container',
+      style: {
+        flex: 1,
+        padding: '10px',
+        color: '#fff',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        height: '100vh',
+        boxSizing: 'border-box'
+      }
+    })
   );
 }
-
 
 function renderPlay(sm, el, router) {
   // Keep the player list in sync
@@ -465,75 +491,81 @@ function renderPlay(sm, el, router) {
   );
 
   // --- Toast helper ---
-  function showWinToast() {
-    const existing = document.getElementById('win-toast');
-    if (existing) return;
+function showWinToast() {
+  const existing = document.getElementById('win-toast');
+  if (existing) return;
 
-    const toastSize = '300px'; // square size
+  // Hide the game container
+setTimeout(() => {
+  const gameRoot = document.getElementById('game-root');
+  if (gameRoot) gameRoot.style.display = 'none';
+}, 50);
 
-    const toast = el('div', {
-      id: 'win-toast',
+  const toastSize = '300px'; // square size
+
+  const toast = el('div', {
+    id: 'win-toast',
+    style: {
+      position: 'fixed',
+      top: '50%',
+      left: '50%',
+      transform: 'translate(-50%, -50%)',
+      width: toastSize,
+      height: toastSize,
+      backgroundColor: 'rgba(0, 0, 0, 0.8)',
+      color: 'white',
+      padding: '1.5rem',
+      zIndex: 9999,
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: '15px',
+      textAlign: 'center',
+      animation: 'fadeIn 0.5s ease-out',
+      boxSizing: 'border-box',
+    }
+  },
+    el('img', {
+      src: './frontend/img/win.gif',
+      alt: 'Victory',
       style: {
-        position: 'fixed',
-        top: '50%',
-        left: '50%',
-        transform: 'translate(-50%, -50%)',
-        width: toastSize,
-        height: toastSize,
-        backgroundColor: 'rgba(0, 0, 0, 0.8)',
-        color: 'white',
-        padding: '1.5rem',
-        zIndex: 9999,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: '15px',
-        border: '2px solid #fff',
-        textAlign: 'center',
-        animation: 'fadeIn 0.5s ease-out',
-        boxSizing: 'border-box',
+        width: '100px',
+        height: '100px',
+        objectFit: 'contain',
       }
-    },
-      el('img', {
-        src: './frontend/img/win.gif',
-        alt: 'Victory',
-        style: {
-          width: '100px',
-          height: '100px',
-          objectFit: 'contain',
-        }
-      }),
-      el('span', {
-        style: {
-          fontSize: '1.8rem',
-          fontWeight: '900',
-          letterSpacing: '2px',
-        }
-      }, 'Victory!'),
-      el('button', {
-        onclick: () => {
-          window.location.href = '/';
-        },
-        style: {
-          padding: '0.5rem 1rem',
-          fontSize: '1rem',
-          cursor: 'pointer'
-        }
-      }, 'Back to Home')
-    );
-
-    document.body.appendChild(toast);
-
-    const style = document.createElement('style');
-    style.innerHTML = `
-      @keyframes fadeIn {
-        0% { opacity: 0; transform: translate(-50%, -45%); }
-        100% { opacity: 1; transform: translate(-50%, -50%); }
+    }),
+    el('span', {
+      style: {
+        fontSize: '1.8rem',
+        fontWeight: '900',
+        letterSpacing: '2px',
       }
-    `;
-    document.head.appendChild(style);
-  }
+    }, 'Victory!'),
+    el('button', {
+      onclick: () => {
+        window.location.href = '/';
+      },
+      style: {
+        padding: '0.5rem 1rem',
+        fontSize: '1rem',
+        cursor: 'pointer'
+      }
+    }, 'Back to Home')
+  );
+
+  document.body.appendChild(toast);
+
+  const style = document.createElement('style');
+  style.innerHTML = `
+    @keyframes fadeIn {
+      0% { opacity: 0; transform: translate(-50%, -45%); }
+      100% { opacity: 1; transform: translate(-50%, -50%); }
+    }
+  `;
+  document.head.appendChild(style);
+}
+
 
   // --- Disconnect the player from the server ---
   function disconnectPlayer() {
