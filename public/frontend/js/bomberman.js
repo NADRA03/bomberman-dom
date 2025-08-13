@@ -17,7 +17,7 @@ import {
     onPowerupPicked,
     sendPickupPowerup,
     sendRespawn
-} from './wsConnect.js';  
+} from './wsConnect.js';
 
 import { StateManager, ViewRenderer, GameLoop } from './mini-framework.js';
 
@@ -197,59 +197,59 @@ export function startGame(container) {
         state.setState({ powerups: next });
     });
 
-onPowerupPicked(({ id, by, type, newMaxBombs, newFlameRange, newMoveIntervalMs, newSpeedLevel }) => {
-    const s = state.getState();
-    const puIndex = s.powerups.findIndex(p => p.id === id);
-    if (puIndex !== -1) {
-        s.powerups[puIndex].element?.remove();
-        const next = s.powerups.slice();
-        next.splice(puIndex, 1);
-        state.setState({ powerups: next });
-    }
-
-    if (by === getClientId()) {
-        // Update stats as before
-        if (type === 'bombs' && newMaxBombs != null) {
-            state.setState({ stats: { ...s.stats, maxBombs: newMaxBombs } });
-        }
-        if (type === 'flames' && newFlameRange != null) {
-            state.setState({ stats: { ...s.stats, flameRange: newFlameRange } });
-        }
-        if (type === 'speed' && newMoveIntervalMs != null) {
-            state.setState({ stats: { ...s.stats, moveIntervalMs: newMoveIntervalMs, speedLevel: newSpeedLevel ?? s.stats.speedLevel } });
+    onPowerupPicked(({ id, by, type, newMaxBombs, newFlameRange, newMoveIntervalMs, newSpeedLevel }) => {
+        const s = state.getState();
+        const puIndex = s.powerups.findIndex(p => p.id === id);
+        if (puIndex !== -1) {
+            s.powerups[puIndex].element?.remove();
+            const next = s.powerups.slice();
+            next.splice(puIndex, 1);
+            state.setState({ powerups: next });
         }
 
-        // Make sure powerupContainer exists before appending icon
-        if (s.powerupContainer && !s.collectedPowerups.includes(type)) {
-            const iconByType = {
-                bombs: 'frontend/img/bombPlusOne.png',
-                flames: 'frontend/img/flamesPlusOne.png',
-                speed: 'frontend/img/speedUp.png'
-            };
-            const iconUrl = iconByType[type] || 'frontend/img/bombPlusOne.png';
-            const icon = view.el('img', {
-                src: iconUrl,
-                style: { width: '30px', height: '30px' }
-            });
+        if (by === getClientId()) {
+            // Update stats as before
+            if (type === 'bombs' && newMaxBombs != null) {
+                state.setState({ stats: { ...s.stats, maxBombs: newMaxBombs } });
+            }
+            if (type === 'flames' && newFlameRange != null) {
+                state.setState({ stats: { ...s.stats, flameRange: newFlameRange } });
+            }
+            if (type === 'speed' && newMoveIntervalMs != null) {
+                state.setState({ stats: { ...s.stats, moveIntervalMs: newMoveIntervalMs, speedLevel: newSpeedLevel ?? s.stats.speedLevel } });
+            }
 
-            s.powerupContainer.appendChild(icon);
+            // Make sure powerupContainer exists before appending icon
+            if (s.powerupContainer && !s.collectedPowerups.includes(type)) {
+                const iconByType = {
+                    bombs: 'frontend/img/bombPlusOne.png',
+                    flames: 'frontend/img/flamesPlusOne.png',
+                    speed: 'frontend/img/speedUp.png'
+                };
+                const iconUrl = iconByType[type] || 'frontend/img/bombPlusOne.png';
+                const icon = view.el('img', {
+                    src: iconUrl,
+                    style: { width: '30px', height: '30px' }
+                });
 
-            // Update collectedPowerups immutably
-            const newCollected = [...s.collectedPowerups, type];
-            state.setState({ collectedPowerups: newCollected });
+                s.powerupContainer.appendChild(icon);
+
+                // Update collectedPowerups immutably
+                const newCollected = [...s.collectedPowerups, type];
+                state.setState({ collectedPowerups: newCollected });
+            }
+        } else {
+            const curr = s.remoteStats[by] || {};
+            const patch = { ...curr };
+            if (type === 'bombs' && newMaxBombs != null) patch.maxBombs = newMaxBombs;
+            if (type === 'flames' && newFlameRange != null) patch.flameRange = newFlameRange;
+            if (type === 'speed' && newMoveIntervalMs != null) {
+                patch.moveIntervalMs = newMoveIntervalMs;
+                patch.speedLevel = newSpeedLevel ?? curr.speedLevel;
+            }
+            state.setState({ remoteStats: { ...s.remoteStats, [by]: patch } });
         }
-    } else {
-        const curr = s.remoteStats[by] || {};
-        const patch = { ...curr };
-        if (type === 'bombs' && newMaxBombs != null) patch.maxBombs = newMaxBombs;
-        if (type === 'flames' && newFlameRange != null) patch.flameRange = newFlameRange;
-        if (type === 'speed' && newMoveIntervalMs != null) {
-            patch.moveIntervalMs = newMoveIntervalMs;
-            patch.speedLevel = newSpeedLevel ?? curr.speedLevel;
-        }
-        state.setState({ remoteStats: { ...s.remoteStats, [by]: patch } });
-    }
-});
+    });
 
 
     const loop = new GameLoop(() => {
@@ -373,10 +373,10 @@ function startGameTimer() {
 
 
 function endGame() {
-  showToast("Time's up! Game over.", 3000);
-  setTimeout(() => {
-    window.location.href = '/';
-  }, 3000);
+    showToast("Time's up! Game over.", 3000);
+    setTimeout(() => {
+        window.location.href = '/';
+    }, 3000);
 }
 
 function update() {
@@ -536,28 +536,28 @@ function explodeBomb(bomb) {
         container.appendChild(fire);
         fires.push(fire);
 
-    if (bomber.x === fx && bomber.y === fy && s.lives > 0) {
-    const newLives = s.lives - 1;
+        if (bomber.x === fx && bomber.y === fy && s.lives > 0) {
+            const newLives = s.lives - 1;
 
-    state.setState({ ...s, lives: newLives });
-    drawHearts();
+            state.setState({ ...s, lives: newLives });
+            drawHearts();
 
-    const color = s.bomber.color || 'blue';
-    const el = s.bomberElement;
+            const color = s.bomber.color || 'blue';
+            const el = s.bomberElement;
 
-    if (el) {
-        el.style.backgroundImage = `url('frontend/img/${color}/hit.png')`;
-    }
+            if (el) {
+                el.style.backgroundImage = `url('frontend/img/${color}/hit.png')`;
+            }
 
-    // Delay before respawn or game over so hit image shows
-    setTimeout(() => {
-        if (newLives <= 0) {
-        handleGameOver();
-        } else {
-        sendRespawn();
+            // Delay before respawn or game over so hit image shows
+            setTimeout(() => {
+                if (newLives <= 0) {
+                    handleGameOver();
+                } else {
+                    sendRespawn();
+                }
+            }, 500); // 500ms delay for hit animation
         }
-    }, 500); // 500ms delay for hit animation
-    }
 
         setTimeout(() => {
             fire.remove();
@@ -608,10 +608,10 @@ function tryPickupPowerup() {
 
 document.addEventListener('keydown', e => {
     if (e.repeat) return;
-    if (e.key === 'ArrowUp') keysDown.up = true;
-    else if (e.key === 'ArrowDown') keysDown.down = true;
-    else if (e.key === 'ArrowLeft') keysDown.left = true;
-    else if (e.key === 'ArrowRight') keysDown.right = true;
+    if (e.key === 'ArrowUp') { keysDown.up = true; movedThisPress.up = false; holdStartAt.up = performance.now(); }
+    else if (e.key === 'ArrowDown') { keysDown.down = true; movedThisPress.down = false; holdStartAt.down = performance.now(); }
+    else if (e.key === 'ArrowLeft') { keysDown.left = true; movedThisPress.left = false; holdStartAt.left = performance.now(); }
+    else if (e.key === 'ArrowRight') { keysDown.right = true; movedThisPress.right = false; holdStartAt.right = performance.now(); }
     else if (e.code === 'Space') {
         e.preventDefault();
         placeBomb();
@@ -619,39 +619,53 @@ document.addEventListener('keydown', e => {
 });
 
 document.addEventListener('keyup', e => {
-    if (e.key === 'ArrowUp') keysDown.up = false;
-    else if (e.key === 'ArrowDown') keysDown.down = false;
-    else if (e.key === 'ArrowLeft') keysDown.left = false;
-    else if (e.key === 'ArrowRight') keysDown.right = false;
+    if (e.key === 'ArrowUp') { keysDown.up = false; movedThisPress.up = false; }
+    else if (e.key === 'ArrowDown') { keysDown.down = false; movedThisPress.down = false; }
+    else if (e.key === 'ArrowLeft') { keysDown.left = false; movedThisPress.left = false; }
+    else if (e.key === 'ArrowRight') { keysDown.right = false; movedThisPress.right = false; }
 });
 
 let keysDown = { up: false, down: false, left: false, right: false };
 let lastMoveAt = 0;
 
+const HOLD_REPEAT_DELAY_MS = 180;
+const MIN_INTERVAL_MS = 80;
+
+let movedThisPress = { up: false, down: false, left: false, right: false };
+let holdStartAt = { up: 0, down: 0, left: 0, right: 0 };
+
 function stepMovement() {
     const now = performance.now();
     const s = state.getState();
-    const interval = s.stats?.moveIntervalMs ?? 120;
-    if (now - lastMoveAt < interval) return;
+
+    const interval = Math.max(MIN_INTERVAL_MS, s.stats?.moveIntervalMs ?? 120);
 
     const { bomber, grid, mapWidth, mapHeight } = s;
 
-    let dx = 0, dy = 0;
-    if (keysDown.up) { dy = -1; bomber.direction = 'up'; }
-    else if (keysDown.down) { dy = 1; bomber.direction = 'down'; }
-    else if (keysDown.left) { dx = -1; bomber.direction = 'left'; }
-    else if (keysDown.right) { dx = 1; bomber.direction = 'right'; }
+    let dir = null, dx = 0, dy = 0;
+    if (keysDown.up) { dir = 'up'; dy = -1; bomber.direction = 'up'; }
+    else if (keysDown.down) { dir = 'down'; dy = 1; bomber.direction = 'down'; }
+    else if (keysDown.left) { dir = 'left'; dx = -1; bomber.direction = 'left'; }
+    else if (keysDown.right) { dir = 'right'; dx = 1; bomber.direction = 'right'; }
     else return;
+
+    const firstMove = !movedThisPress[dir];
+    const heldFor = now - holdStartAt[dir];
+    const canRepeat = heldFor >= HOLD_REPEAT_DELAY_MS && (now - lastMoveAt) >= interval;
+    const canMoveNow = firstMove || canRepeat;
+    if (!canMoveNow) return;
 
     const nextX = bomber.x + dx;
     const nextY = bomber.y + dy;
-
     if (nextX < 0 || nextX >= mapWidth || nextY < 0 || nextY >= mapHeight) return;
+
     const cell = grid[nextY][nextX];
     if (cell === 1 || cell === 2) return;
 
     bomber.x = nextX;
     bomber.y = nextY;
+
+    movedThisPress[dir] = true;
     lastMoveAt = now;
 
     update();
@@ -659,97 +673,95 @@ function stepMovement() {
     tryPickupPowerup();
 }
 
+
 function showToast(message, duration = 3000) {
-  // Create overlay to block all interactions
-  let overlay = document.getElementById('toast-overlay');
-  if (!overlay) {
-    overlay = document.createElement('div');
-    overlay.id = 'toast-overlay';
-    Object.assign(overlay.style, {
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      width: '100vw',
-      height: '100vh',
-      background: 'transparent',
-      zIndex: 9999,
-      pointerEvents: 'auto',
+    // Create overlay to block all interactions
+    let overlay = document.getElementById('toast-overlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'toast-overlay';
+        Object.assign(overlay.style, {
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100vw',
+            height: '100vh',
+            background: 'transparent',
+            zIndex: 9999,
+            pointerEvents: 'auto',
+        });
+
+        // Block pointer events
+        overlay.addEventListener('click', e => e.stopPropagation(), true);
+        overlay.addEventListener('mousedown', e => e.stopPropagation(), true);
+        overlay.addEventListener('mouseup', e => e.stopPropagation(), true);
+        overlay.addEventListener('touchstart', e => e.stopPropagation(), true);
+        overlay.addEventListener('touchend', e => e.stopPropagation(), true);
+
+        // Block keyboard events
+        overlay.tabIndex = 0; // make focusable
+        overlay.addEventListener('keydown', e => e.stopPropagation(), true);
+        overlay.addEventListener('keyup', e => e.stopPropagation(), true);
+        overlay.addEventListener('keypress', e => e.stopPropagation(), true);
+
+        document.body.appendChild(overlay);
+        overlay.focus();
+    }
+
+    // Toast container
+    let toastContainer = document.getElementById('toast-container');
+    if (!toastContainer) {
+        toastContainer = document.createElement('div');
+        toastContainer.id = 'toast-container';
+        Object.assign(toastContainer.style, {
+            position: 'fixed',
+            bottom: '50%',
+            left: '50%',
+            transform: 'translate(-50%, 50%)',
+            zIndex: 10000,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '10px',
+            pointerEvents: 'none',
+        });
+        document.body.appendChild(toastContainer);
+    }
+
+    // Create toast element
+    const toast = document.createElement('div');
+    toast.textContent = message;
+    Object.assign(toast.style, {
+        background: 'rgba(0,0,0,0.8)',
+        color: 'white',
+        padding: '12px 24px',
+        fontSize: '25px',
+        pointerEvents: 'auto',
+        opacity: '0',
+        transition: 'opacity 0.3s ease',
+        userSelect: 'none',
     });
 
-    // Block pointer events
-    overlay.addEventListener('click', e => e.stopPropagation(), true);
-    overlay.addEventListener('mousedown', e => e.stopPropagation(), true);
-    overlay.addEventListener('mouseup', e => e.stopPropagation(), true);
-    overlay.addEventListener('touchstart', e => e.stopPropagation(), true);
-    overlay.addEventListener('touchend', e => e.stopPropagation(), true);
+    toastContainer.appendChild(toast);
 
-    // Block keyboard events
-    overlay.tabIndex = 0; // make focusable
-    overlay.addEventListener('keydown', e => e.stopPropagation(), true);
-    overlay.addEventListener('keyup', e => e.stopPropagation(), true);
-    overlay.addEventListener('keypress', e => e.stopPropagation(), true);
-
-    document.body.appendChild(overlay);
-    overlay.focus();
-  }
-
-  // Toast container
-  let toastContainer = document.getElementById('toast-container');
-  if (!toastContainer) {
-    toastContainer = document.createElement('div');
-    toastContainer.id = 'toast-container';
-    Object.assign(toastContainer.style, {
-      position: 'fixed',
-      bottom: '50%',
-      left: '50%',
-      transform: 'translate(-50%, 50%)',
-      zIndex: 10000,
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '10px',
-      pointerEvents: 'none',
+    // Fade in
+    requestAnimationFrame(() => {
+        toast.style.opacity = '1';
     });
-    document.body.appendChild(toastContainer);
-  }
 
-  // Create toast element
-  const toast = document.createElement('div');
-  toast.textContent = message;
-  Object.assign(toast.style, {
-    background: 'rgba(0,0,0,0.8)',
-    color: 'white',
-    padding: '12px 24px',
-    fontSize: '25px',
-    pointerEvents: 'auto',
-    opacity: '0',
-    transition: 'opacity 0.3s ease',
-    userSelect: 'none',
-  });
-
-  toastContainer.appendChild(toast);
-
-  // Fade in
-  requestAnimationFrame(() => {
-    toast.style.opacity = '1';
-  });
-
-  // Remove toast and overlay after duration
-  setTimeout(() => {
-    toast.style.opacity = '0';
-    toast.addEventListener('transitionend', () => {
-      toast.remove();
-      if (overlay) overlay.remove();
-    });
-  }, duration);
+    // Remove toast and overlay after duration
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.addEventListener('transitionend', () => {
+            toast.remove();
+            if (overlay) overlay.remove();
+        });
+    }, duration);
 }
 
 function handleGameOver() {
-  showToast("Game Over! You ran out of lives.", 4000);
-  
-  setTimeout(() => {
-    window.location.href = '/'; 
-  }, 4000);
+    showToast("Game Over! You ran out of lives.", 4000);
+
+    setTimeout(() => {
+        window.location.href = '/';
+    }, 4000);
 }
-
-
-
