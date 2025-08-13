@@ -58,7 +58,7 @@ const state = new StateManager({
 
     stats: { maxBombs: 1, flameRange: 1, moveIntervalMs: 120, speedLevel: 0 },
 
-    gameTimeLeft: 3 //////////////////developer
+    gameTimeLeft: 180 //////////////////developer
 });
 
 const view = new ViewRenderer('#game-root');
