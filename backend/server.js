@@ -5,8 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import cookie from 'cookie';
 
-const __filename = fileURLToPath(
-    import.meta.url);
+const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
@@ -133,9 +132,7 @@ function maybeSpawnPowerup(x, y) {
     const pu = createPowerup({ type, x, y });
 
     const occupant = Object.values(users).find(u => u.x === x && u.y === y);
-    if (occupant) {
-        return;
-    }
+    if (occupant) return;
 
     broadcast('powerup-spawn', { powerup: pu });
 }
@@ -169,13 +166,12 @@ wss.on('connection', (ws, req) => {
         }
 
         if (data.type === 'check-join') {
-        // Deny if any user is playing or lobby full
-        const anyPlaying = Object.values(users).some(u => u.x !== null && u.y !== null);
-        if (anyPlaying || Object.keys(users).length >= 4) {
-            ws.send(JSON.stringify({ type: 'check-join-response', allowed: false, message: 'Game in progress or lobby full' }));
-        } else {
-            ws.send(JSON.stringify({ type: 'check-join-response', allowed: true }));
-        }
+            const anyPlaying = Object.values(users).some(u => u.x !== null && u.y !== null);
+            if (anyPlaying || Object.keys(users).length >= 4) {
+                ws.send(JSON.stringify({ type: 'check-join-response', allowed: false, message: 'Game in progress or lobby full' }));
+            } else {
+                ws.send(JSON.stringify({ type: 'check-join-response', allowed: true }));
+            }
         }
 
         if (data.type === 'new-user') {
@@ -214,6 +210,11 @@ wss.on('connection', (ws, req) => {
 
         if (data.type === 'start-game') {
             if (!users[data.id]) return;
+
+            // --- REGENERATE MAP FOR NEW GAME ---
+            mapData.length = 0; // clear old map
+            const newMap = generateMapData(mapWidth, mapHeight);
+            newMap.forEach(row => mapData.push(row));
 
             if (takenSpawns.has(data.id)) {
                 takenSpawns.delete(data.id);
@@ -263,9 +264,7 @@ wss.on('connection', (ws, req) => {
 
             const now = Date.now();
             const MOVE_INTERVAL_MS = u.stats?.moveIntervalMs ?? 100;
-            if (u.lastMoveAt && now - u.lastMoveAt < MOVE_INTERVAL_MS) {
-                return;
-            }
+            if (u.lastMoveAt && now - u.lastMoveAt < MOVE_INTERVAL_MS) return;
             u.lastMoveAt = now;
 
             const dx = Math.abs((data.x ?? u.x) - (u.x ?? 0));
@@ -277,77 +276,23 @@ wss.on('connection', (ws, req) => {
             u.x = data.x;
             u.y = data.y;
 
-            const moveData = JSON.stringify({
-                type: 'player-move',
-                id: data.id,
-                x: data.x,
-                y: data.y
-            });
+            const moveData = JSON.stringify({ type: 'player-move', id: data.id, x: data.x, y: data.y });
             wss.clients.forEach(client => {
                 if (client.readyState === ws.OPEN) client.send(moveData);
             });
-
-            // const pu = [...powerups.values()].find(p => p.x === data.x && p.y === data.y);
-            // if (pu) {
-            //     if (pu.type === 'bombs') {
-            //         u.stats.maxBombs += 1;
-            //         powerups.delete(pu.id);
-            //         broadcast('powerup-picked', {
-            //             id: pu.id,
-            //             by: u.id,
-            //             powerupType: 'bombs',
-            //             newMaxBombs: u.stats.maxBombs
-            //         });
-            //     } else if (pu.type === 'flames') {
-            //         u.stats.flameRange = (u.stats?.flameRange || 1) + 1;
-            //         powerups.delete(pu.id);
-            //         broadcast('powerup-picked', {
-            //             id: pu.id,
-            //             by: u.id,
-            //             powerupType: 'flames',
-            //             newFlameRange: u.stats.flameRange
-            //         });
-            //     } else if (pu.type === 'speed') {
-            //         const current = u.stats.moveIntervalMs ?? 120;
-            //         const next = Math.max(30, current - 50);
-            //         u.stats.moveIntervalMs = next;
-            //         u.stats.speedLevel = (u.stats.speedLevel || 0) + 1;
-            //         powerups.delete(pu.id);
-            //         broadcast('powerup-picked', {
-            //             id: pu.id,
-            //             by: u.id,
-            //             powerupType: 'speed',
-            //             newMoveIntervalMs: next,
-            //             newSpeedLevel: u.stats.speedLevel
-            //         });
-            //     }
-            // }
         }
 
         if (data.type === 'bomb') {
             const u = users[data.id];
             if (!u) return;
-
-            if (u.activeBombs >= u.stats.maxBombs) {
-                // ws.send(JSON.stringify({ type: 'error', message: 'bomb cap reached' }));
-                return;
-            }
-
+            if (u.activeBombs >= u.stats.maxBombs) return;
             u.activeBombs++;
 
-            broadcast('bomb', {
-                type: 'bomb',
-                id: data.id,
-                x: data.x,
-                y: data.y
-            });
+            broadcast('bomb', { type: 'bomb', id: data.id, x: data.x, y: data.y });
 
             setTimeout(() => {
-                try {
-                    explodeServerBomb(u, data.x, data.y);
-                } finally {
-                    u.activeBombs = Math.max(0, u.activeBombs - 1);
-                }
+                try { explodeServerBomb(u, data.x, data.y); }
+                finally { u.activeBombs = Math.max(0, u.activeBombs - 1); }
             }, 2000);
         }
 
@@ -356,9 +301,8 @@ wss.on('connection', (ws, req) => {
             if (!u) return;
             const pu = powerups.get(data.powerupId);
             if (!pu) return;
-            if (u.x !== pu.x || u.y !== pu.y) return;  // must be on the tile
+            if (u.x !== pu.x || u.y !== pu.y) return;
 
-            // award based on type
             if (pu.type === 'bombs') {
                 u.stats.maxBombs += 1;
                 powerups.delete(pu.id);
@@ -385,69 +329,27 @@ wss.on('connection', (ws, req) => {
             u.y = u.spawn.y;
             u.lastMoveAt = 0;
 
-            u.ws.send(JSON.stringify({
-                type: 'spawn-position',
-                id: u.id,
-                x: u.x,
-                y: u.y,
-                color: u.color
-            }));
-
+            u.ws.send(JSON.stringify({ type: 'spawn-position', id: u.id, x: u.x, y: u.y, color: u.color }));
             broadcast('player-move', { id: u.id, x: u.x, y: u.y });
             return;
         }
-
-        // if (data.type === 'pickup-powerup') {
-        //     const u = users[data.id];
-        //     if (!u) return;
-        //     const pu = powerups.get(data.powerupId);
-        //     if (!pu) return;
-
-        //     if (u.x !== pu.x || u.y !== pu.y) return;
-
-        //     if (pu.type === 'bombs') {
-        //         u.stats.maxBombs += 1;
-        //         powerups.delete(pu.id);
-        //         broadcast('powerup-picked', {
-        //             id: pu.id,
-        //             by: u.id,
-        //             type: pu.type,
-        //             newMaxBombs: u.stats.maxBombs
-        //         });
-        //     }
-        // }
 
         if (data.type === 'chat-message') {
             console.log('[CHAT] Incoming:', data);
 
             const { id, room, text } = data.payload;
-            if (!id) {
-                console.warn('Missing player ID');
-                return;
-            }
+            if (!id) return;
 
             const user = users[id];
-            if (!user) {
-                console.warn('Unknown player:', id);
-                return;
-            }
+            if (!user) return;
 
-            const message = {
-                type: 'chat-message',
-                room,
-                id,            
-                from: user.name,
-                text
-            };
-
+            const message = { type: 'chat-message', room, id, from: user.name, text };
             const messageStr = JSON.stringify(message);
+
             wss.clients.forEach(client => {
-                if (client.readyState === client.OPEN) {
-                    client.send(messageStr);
-                }
+                if (client.readyState === client.OPEN) client.send(messageStr);
             });
         }
-
     });
 
     ws.on('close', () => {
@@ -460,8 +362,6 @@ wss.on('connection', (ws, req) => {
         }
     });
 });
-
-
 
 app.use(express.static(path.join(__dirname, '../public')));
 

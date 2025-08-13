@@ -17,7 +17,7 @@ import {
     onPowerupPicked,
     sendPickupPowerup,
     sendRespawn
-} from './wsConnect.js';
+} from './wsConnect.js';  
 
 import { StateManager, ViewRenderer, GameLoop } from './mini-framework.js';
 
@@ -58,7 +58,7 @@ const state = new StateManager({
 
     stats: { maxBombs: 1, flameRange: 1, moveIntervalMs: 120, speedLevel: 0 },
 
-    gameTimeLeft: 100
+    gameTimeLeft: 3 //////////////////developer
 });
 
 const view = new ViewRenderer('#game-root');
@@ -269,6 +269,7 @@ function drawHearts() {
     const s = state.getState();
     if (s.heartContainer) s.heartContainer.remove();
 
+    // Hearts + powerups container (center top)
     const container = view.el('div', {
         style: {
             position: 'fixed',
@@ -279,10 +280,11 @@ function drawHearts() {
             gap: '10px',
             alignItems: 'center',
             zIndex: 1000,
-            pointerEvents: 'none'
+            pointerEvents: 'none', // allow clicks to pass through except button
         }
     });
 
+    // Draw hearts
     for (let i = 0; i < s.lives; i++) {
         const heart = view.el('img', {
             src: 'frontend/img/heart.png',
@@ -291,13 +293,13 @@ function drawHearts() {
         container.appendChild(heart);
     }
 
-    // Create powerupContainer if missing, attach to container
+    // Draw powerups
     if (!s.powerupContainer) {
         const powerupWrap = view.el('div', {
             style: {
                 display: 'flex',
                 gap: '5px',
-                marginLeft: '50px'
+                marginLeft: '20px'
             }
         });
         container.appendChild(powerupWrap);
@@ -308,6 +310,26 @@ function drawHearts() {
 
     document.body.appendChild(container);
     state.setState({ heartContainer: container });
+
+    // Leave button at top-left
+    let leaveBtn = document.getElementById('leave-btn');
+    if (!leaveBtn) {
+        leaveBtn = view.el('button', {
+            id: 'leave-btn',
+            onclick: () => {
+                window.location.href = '/'; // go back to home
+            },
+            style: {
+                position: 'fixed',
+                top: '10px',
+                left: '20px',
+                zIndex: 1000,
+                border: 'none'
+            }
+        }, 'Leave');
+
+        document.body.appendChild(leaveBtn);
+    }
 }
 
 
@@ -323,7 +345,6 @@ function drawTimer() {
                 right: '20px',
                 fontSize: '30px',
                 color: '#fff',
-                padding: '5px 10px',
                 borderRadius: '8px',
                 zIndex: 1000
             }

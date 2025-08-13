@@ -191,49 +191,77 @@ function renderNameForm(sm, el) {
 function renderLobby(sm, el) {
   const state = sm.getState();
 
+  let waitTimer = null;       // 20-second wait timer
+  let readyTimer = null;      // 10-second ready countdown
+
   onUserListUpdate(users => {
     sm.setState({ users });
+    const numPlayers = users.length;
 
-    if (users.length >= 2 && sm.getState().countdown == null) {
-      let seconds = 5;
-      sm.setState({ countdown: seconds });
-
-      const timer = setInterval(() => {
-        seconds--;
-        sm.setState({ countdown: seconds });
-        if (seconds <= 0) {
-          clearInterval(timer);
-          sm.setState(s => ({
-            ...s,
-            routePermission: { ...s.routePermission, play: true }
-          }));
-          window.location.hash = '#play';
+    // 2-3 players: start 20-second wait timer if not running
+    if (numPlayers >= 2 && numPlayers < 4 && waitTimer == null && readyTimer == null) {
+      let waitSeconds = 3;  /////////////////////////developer
+      updateCountdown(waitSeconds, 'Waiting for more players...');
+      waitTimer = setInterval(() => {
+        waitSeconds--;
+        updateCountdown(waitSeconds, 'Waiting for more players...');
+        if (waitSeconds <= 0) {
+          clearInterval(waitTimer);
+          waitTimer = null;
+          startReadyCountdown();
         }
       }, 1000);
     }
 
-    if (users.length < 2 && sm.getState().countdown != null) {
-      sm.setState({ countdown: null });
+    // 4 players: skip wait, start ready countdown immediately
+    if (numPlayers === 4 && readyTimer == null) {
+      if (waitTimer) {
+        clearInterval(waitTimer);
+        waitTimer = null;
+      }
+      startReadyCountdown();
+    }
+
+    // Reset if players < 2
+    if (numPlayers < 2) {
+      if (waitTimer) { clearInterval(waitTimer); waitTimer = null; }
+      if (readyTimer) { clearInterval(readyTimer); readyTimer = null; }
+      updateCountdown(null);
     }
   });
 
+  function startReadyCountdown() {
+    let countdown = 3;    /////////////////////////developer
+    updateCountdown(countdown, 'Get ready!');
+    readyTimer = setInterval(() => {
+      countdown--;
+      updateCountdown(countdown, 'Get ready!');
+      if (countdown <= 0) {
+        clearInterval(readyTimer);
+        readyTimer = null;
+        sm.setState(s => ({
+          ...s,
+          routePermission: { ...s.routePermission, play: true }
+        }));
+        window.location.hash = '#play';
+      }
+    }, 1000);
+  }
+
+  function updateCountdown(seconds, prefix = '') {
+    const el = document.getElementById('countdown-text');
+    if (el) el.textContent = seconds != null ? `${prefix} ${seconds}...` : '';
+  }
+
+  // Initialize chat
   setTimeout(() => {
     const chatRoot = document.getElementById('chat-root');
-    if (chatRoot) {
-      import('./chat.js').then(mod => mod.initChat('#chat-root', 'lobby'));
-    }
+    if (chatRoot) import('./chat.js').then(mod => mod.initChat('#chat-root', 'lobby'));
   }, 0);
 
   return el('div', {
     className: 'page-wrapper',
-    style: {
-      display: 'flex',
-      width: '100%',
-      maxWidth: '1200px',
-      margin: '0 auto',
-      height: '100vh',
-      position: 'relative',
-    }
+    style: { display: 'flex', width: '100%', maxWidth: '1200px', margin: '0 auto', height: '100vh', position: 'relative' }
   },
 
   el('h1', {
@@ -242,35 +270,34 @@ function renderLobby(sm, el) {
       position: 'absolute',
       color: 'yellow',
       fontSize: '100px',
-      top: '50px',
-      left: '50%',               
-      transform: 'translateX(-50%)', 
+      top: '20px',
+      left: '50%',
+      transform: 'translateX(-50%)',
       opacity: 0.7,
       pointerEvents: 'none',
       zIndex: 2,
       userSelect: 'none',
-      textShadow: '2px 2px 4px rgba(0, 0, 0, 1)'
+      textShadow: '2px 2px 4px rgba(0,0,0,1)'
     }
   }, 'BOMBERMEN'),
 
   el('div', {
     className: 'lobby-content',
-  style: {
-    flex: 3,
-    padding: '40px 20px',
-    marginRight: '340px',
-    textAlign: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-    overflow: 'visible',
-    backgroundColor: '#000',
-
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: '100vh',
-  }
+    style: {
+      flex: 3,
+      padding: '40px 20px',
+      marginRight: '340px',
+      textAlign: 'center',
+      justifyContent: 'center',
+      position: 'relative',
+      overflow: 'visible',
+      backgroundColor: '#000',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      height: '100vh'
+    }
   },
 
   el('div', {
@@ -286,28 +313,15 @@ function renderLobby(sm, el) {
       backgroundPosition: 'center',
       opacity: 0.5,
       pointerEvents: 'none',
-      zIndex: 0,
+      zIndex: 0
     }
   }),
 
-  el('div', {
-    style: {
-      position: 'relative',
-      zIndex: 1,
-    }
-  },
-    // el('p', { style: { marginTop: '50%',  color: 'yellow', } }, 'Welcome, ', el('strong', {}, state.playerName)),
+  el('div', { style: { position: 'relative', zIndex: 1 } },
     el('h1', {}, 'Connected Players:'),
     el('ul', {},
       state.users.map(u =>
-        el('li', {
-          style: {
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-            marginBottom: '6px'
-          }
-        },
+        el('li', { style: { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' } },
           el('img', {
             src: `frontend/img/${u.color || 'blue'}/front.png`,
             alt: u.color || 'player',
@@ -317,18 +331,8 @@ function renderLobby(sm, el) {
         )
       )
     ),
-    el('p', {}, state.countdown != null ? `Game starting in ${state.countdown}...` : ''),
-    el('button', {
-      onclick: () => {
-        sm.setState(s => ({
-          ...s,
-          routePermission: { ...s.routePermission, play: true }
-        }));
-        window.location.hash = '#play';
-      }
-    }, 'Start Game'),
-  )
-  ),
+    el('p', { id: 'countdown-text' }, '')
+  )),
 
   el('aside', {
     id: 'chat-root',
@@ -337,16 +341,16 @@ function renderLobby(sm, el) {
       flex: 1,
       padding: '10px',
       color: '#fff',
-
       display: 'flex',
       flexDirection: 'column',
       justifyContent: 'center',
       height: '100vh',
-      boxSizing: 'border-box',
+      boxSizing: 'border-box'
     }
   })
   );
 }
+
 
 function renderPlay(sm, el, router) {
   // Keep the player list in sync
@@ -465,6 +469,8 @@ function renderPlay(sm, el, router) {
     const existing = document.getElementById('win-toast');
     if (existing) return;
 
+    const toastSize = '300px'; // square size
+
     const toast = el('div', {
       id: 'win-toast',
       style: {
@@ -472,38 +478,47 @@ function renderPlay(sm, el, router) {
         top: '50%',
         left: '50%',
         transform: 'translate(-50%, -50%)',
+        width: toastSize,
+        height: toastSize,
         backgroundColor: 'rgba(0, 0, 0, 0.8)',
         color: 'white',
-        padding: '2.5rem 4rem',
+        padding: '1.5rem',
         zIndex: 9999,
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        gap: '25px',
+        justifyContent: 'center',
+        gap: '15px',
         border: '2px solid #fff',
         textAlign: 'center',
-        animation: 'fadeIn 0.5s ease-out'
+        animation: 'fadeIn 0.5s ease-out',
+        boxSizing: 'border-box',
       }
     },
       el('img', {
         src: './frontend/img/win.gif',
         alt: 'Victory',
         style: {
-          width: '200px',
-          height: '200px',
+          width: '100px',
+          height: '100px',
           objectFit: 'contain',
         }
       }),
       el('span', {
         style: {
-          fontSize: '2.5rem',
+          fontSize: '1.8rem',
           fontWeight: '900',
           letterSpacing: '2px',
         }
       }, 'Victory!'),
       el('button', {
         onclick: () => {
-          window.location.href = '/';           
+          window.location.href = '/';
+        },
+        style: {
+          padding: '0.5rem 1rem',
+          fontSize: '1rem',
+          cursor: 'pointer'
         }
       }, 'Back to Home')
     );
