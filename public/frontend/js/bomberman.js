@@ -90,17 +90,17 @@ export function startGame(container) {
         drawHearts();
         drawTimer();
 
-        const spawnX = 1;
-        const spawnY = 1;
-        if (grid[spawnY][spawnX] !== 0) {
-            console.warn('Spawn blocked, clearing cell...');
-            grid[spawnY][spawnX] = 0;
-        }
+        // const spawnX = 1;
+        // const spawnY = 1;
+        // if (grid[spawnY][spawnX] !== 0) {
+        //     console.warn('Spawn blocked, clearing cell...');
+        //     grid[spawnY][spawnX] = 0;
+        // }
 
-        state.setState(s => ({
-            ...s,
-            bomber: { ...s.bomber, x: spawnX, y: spawnY }
-        }));
+        // state.setState(s => ({
+        //     ...s,
+        //     bomber: { ...s.bomber, x: spawnX, y: spawnY }
+        // }));
 
         sendStartGame();
         update();

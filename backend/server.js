@@ -28,6 +28,8 @@ const spawnPoints = [
 
 const availableColors = ['blue', 'brown', 'grey', 'yellow'];
 
+let gameActive = false;
+
 function createPowerup({ type, x, y }) {
     const id = String(nextPowerupId++);
     const pu = { id, type, x, y };
@@ -212,9 +214,19 @@ wss.on('connection', (ws, req) => {
             if (!users[data.id]) return;
 
             // --- REGENERATE MAP FOR NEW GAME ---
-            mapData.length = 0; // clear old map
-            const newMap = generateMapData(mapWidth, mapHeight);
-            newMap.forEach(row => mapData.push(row));
+            // mapData.length = 0; // clear old map
+            // const newMap = generateMapData(mapWidth, mapHeight);
+            // newMap.forEach(row => mapData.push(row));
+
+            // Generate & broadcast map only once per round
+            if (!gameActive) {
+                const newMap = generateMapData(mapWidth, mapHeight);
+                mapData.length = 0;
+                newMap.forEach(row => mapData.push(row));
+                powerups.clear();
+                broadcast('map-data', { grid: mapData });
+                gameActive = true;
+            }
 
             if (takenSpawns.has(data.id)) {
                 takenSpawns.delete(data.id);
@@ -359,6 +371,12 @@ wss.on('connection', (ws, req) => {
             takenSpawns.delete(id);
             delete users[id];
             broadcast('player-disconnect', { id });
+        }
+
+        if (Object.keys(users).length === 0) {
+            gameActive = false;
+            powerups.clear();
+            takenSpawns.clear();
         }
     });
 });

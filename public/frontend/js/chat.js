@@ -12,13 +12,13 @@ let room = null;
 export function initChat(containerSelector, roomName) {
   onChatMessage(({ room: msgRoom, from, text, id }) => {
     if (msgRoom !== room) return;
-    
+
     chatState.setState(s => ({
       messages: [...s.messages, { from, text, id }]
     }));
     console.log('Incoming chat message:', { from, text, room: msgRoom, id });
   });
-  
+
   room = roomName;
   view = new ViewRenderer(containerSelector);
   view.mount(chatState, renderChatUI);
@@ -100,22 +100,23 @@ function renderChatUI(state, el) {
             userSelect: 'text'
           }
         },
-        state.messages.map((msg, index) => {
-          const id = document.cookie.match(/player_id=([^;]+)/)?.[1];
-          const isMine = msg.id === id; 
+          state.messages.map((msg, index) => {
+            const id = document.cookie.match(/player_id=([^;]+)/)?.[1];
+            const isMine = msg.id === id;
+            console.log(msg)
 
-          return el('div', {
-            key: index,
-            className: 'chat-msg',
-            style: {
-              marginBottom: '5px',
-              textAlign: isMine ? 'right' : 'left' 
-            }
-          },
-            el('strong', {}, `${msg.from}: `),
-            msg.text
-          );
-        })
+            return el('div', {
+              key: index,
+              className: 'chat-msg',
+              style: {
+                marginBottom: '5px',
+                textAlign: isMine ? 'right' : 'left'
+              }
+            },
+              el('strong', {}, `${msg.from}: `),
+              msg.text
+            );
+          })
 
         ),
         rightFireColumn
@@ -150,15 +151,15 @@ function sendMessage() {
   const state = chatState.getState();
   const msg = state.currentInput.trim();
   if (!msg) return;
-  
+
   const id = document.cookie.match(/player_id=([^;]+)/)?.[1];
   if (!id) {
     console.error('No player ID found in cookies');
     return;
   }
-  
+
   console.log('Sending message:', { id, room, text: msg });
   sendChatMessage({ id, room, text: msg });
-  
+
   chatState.setState({ currentInput: '' });
 }
