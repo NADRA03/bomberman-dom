@@ -1,6 +1,6 @@
 import { StateManager, Router, ViewRenderer } from './mini-framework.js';
 import { sendUsername, onUserListUpdate, getClientId } from './wsConnect.js';
-import { onPlayerDisconnect } from './wsConnect.js';
+import { onPlayerDisconnect, socket } from './wsConnect.js';
 
 const app = document.createElement('div');
 app.id = 'app';
@@ -13,8 +13,8 @@ const stateManager = new StateManager({
   countdown: null,
   userRegistered: false,
   routePermission: {
-    lobby: false,
-    play: false
+    lobby: true,
+    play: true
   }
 });
 
@@ -25,6 +25,12 @@ const renderApp = (state, el) => {
 
   console.log('Current route:', path, 'User registered:', state.userRegistered);
 
+  // --- Route guard: redirect to root if not registered ---
+  if (!state.userRegistered && path !== '') {
+    window.location.hash = '#';   // go to root
+    return renderNameForm(stateManager, el);
+  }
+
   if (path === '') return renderNameForm(stateManager, el);
 
   if (path === 'lobby') {
@@ -33,7 +39,7 @@ const renderApp = (state, el) => {
   }
 
   if (path === 'play') {
-    if (state.routePermission.play || state.devMode) return renderPlay(stateManager, el);
+    if (state.routePermission.play || state.devMode) return renderPlay(stateManager, el, router);
     return renderNotFound(el);
   }
 
@@ -143,25 +149,36 @@ function renderNameForm(sm, el) {
         el('button', {
           onclick: () => {
             const name = sm.getState().playerName.trim() || 'Player';
-            sm.setState({
-              playerName: name,
-              routePermission: { lobby: true, play: false }
-            });
-
             const id = getClientId();
-            console.log('Registering user:', name, 'with ID:', id);
 
-            sm.setState({ userRegistered: true });
+            // Step 1: Ask server if joining is allowed
+            socket.send(JSON.stringify({ type: 'check-join' }));
 
-            localStorage.setItem('playerName', name);
-            sendUsername(name, id);
-            window.location.hash = '#lobby';
+            const handleServer = (event) => {
+              const data = JSON.parse(event.data);
+
+              if (data.type === 'check-join-response') {
+                if (!data.allowed) {
+                  alert(data.message || 'Game in progress. Please wait.');
+                } else {
+                  // Step 2: Register user only if allowed
+                  socket.send(JSON.stringify({ type: 'new-user', id, name }));
+                  sm.setState({
+                    playerName: name,
+                    routePermission: { lobby: true, play: false },
+                    userRegistered: true
+                  });
+                  localStorage.setItem('playerName', name);
+                  window.location.hash = '#lobby';
+                }
+
+                socket.removeEventListener('message', handleServer);
+              }
+            };
+
+            socket.addEventListener('message', handleServer);
           },
-          style: {
-            padding: '0.5rem 1rem',
-            fontSize: '1rem',
-            cursor: 'pointer'
-          }
+          style: { padding: '0.5rem 1rem', fontSize: '1rem', cursor: 'pointer' }
         }, 'Enter Lobby')
       )
     ),
@@ -214,9 +231,27 @@ function renderLobby(sm, el) {
       width: '100%',
       maxWidth: '1200px',
       margin: '0 auto',
+      height: '100vh',
       position: 'relative',
     }
   },
+
+  el('h1', {
+    style: {
+      margin: 0,
+      position: 'absolute',
+      color: 'yellow',
+      fontSize: '100px',
+      top: '50px',
+      left: '50%',               
+      transform: 'translateX(-50%)', 
+      opacity: 0.7,
+      pointerEvents: 'none',
+      zIndex: 2,
+      userSelect: 'none',
+      textShadow: '2px 2px 4px rgba(0, 0, 0, 1)'
+    }
+  }, 'BOMBERMEN'),
 
   el('div', {
     className: 'lobby-content',
@@ -313,31 +348,49 @@ function renderLobby(sm, el) {
   );
 }
 
-function renderPlay(sm, el) {
-  const state = sm.getState();
+function renderPlay(sm, el, router) {
+  // Keep the player list in sync
+  onUserListUpdate(users => {
+    sm.setState({ users });
+  });
 
+  // Disconnect handler
+  onPlayerDisconnect(id => {
+    const s = sm.getState();
+    if (!Array.isArray(s.users)) return;
+
+    const updatedUsers = s.users.map(u =>
+      u.id === id ? { ...u, disconnected: true } : u
+    );
+
+    sm.setState({ ...s, users: updatedUsers });
+    console.log('Player disconnected:', id, 'Updated users:', updatedUsers);
+
+    // Check if only local player remains
+    const activePlayers = updatedUsers.filter(u => !u.disconnected && u.id !== getClientId());
+    if (activePlayers.length === 0) {
+      blockAllInput();
+      showWinToast();
+      disconnectPlayer();
+    }
+  });
+
+  // Load game and chat
   setTimeout(() => {
     const container = document.getElementById('game-root');
-    if (container) {
-      import('./bomberman.js').then(mod => {
-        mod.startGame(container);
-      });
-    }
+    if (container) import('./bomberman.js').then(mod => mod.startGame(container));
 
     const chatRoot = document.getElementById('chat-root');
     if (chatRoot) import('./chat.js').then(mod => mod.initChat('#chat-root', 'game'));
   }, 0);
 
+  const state = sm.getState();
+
   return el('div', {
     className: 'page-wrapper',
-    style: {
-      display: 'flex',
-      height: '100vh',
-      maxWidth: '1200px',
-      margin: '0 auto',
-    }
+    style: { display: 'flex', height: '100vh', maxWidth: '1200px', margin: '0 auto' }
   },
-
+    // LEFT: Player list
     el('aside', {
       style: {
         padding: '10px',
@@ -350,14 +403,8 @@ function renderPlay(sm, el) {
         marginRight: '50px',
       }
     },
-      el('ul', {
-        style: {
-          listStyle: 'none',
-          padding: 0,
-          margin: 0
-        }
-      },
-        state.users.map(u =>
+      el('ul', { style: { listStyle: 'none', padding: 0, margin: 0 } },
+        (state.users || []).map(u =>
           el('li', {
             style: {
               display: 'flex',
@@ -366,13 +413,17 @@ function renderPlay(sm, el) {
               marginBottom: '6px',
               color: u.disconnected ? 'red' : 'white',
               fontWeight: u.disconnected ? 'bold' : 'normal',
-              position: 'relative',
             }
           },
             el('img', {
               src: `frontend/img/${u.color || 'blue'}/front.png`,
               alt: u.color || 'player',
-              style: { width: '50px', height: '50px', imageRendering: 'pixelated', opacity: u.disconnected ? 0.5 : 1 }
+              style: {
+                width: '50px',
+                height: '50px',
+                imageRendering: 'pixelated',
+                opacity: u.disconnected ? 0.5 : 1
+              }
             }),
             el('span', {}, u.name),
             u.disconnected && el('span', {
@@ -390,12 +441,7 @@ function renderPlay(sm, el) {
     ),
 
     // CENTER: Game root
-    el('div', {
-      id: 'game-root',
-      style: {
-        flex: 3,
-      }
-    }),
+    el('div', { id: 'game-root', style: { flex: 3 } }),
 
     // RIGHT: Chat
     el('div', {
@@ -413,6 +459,103 @@ function renderPlay(sm, el) {
       }
     })
   );
+
+  // --- Toast helper ---
+  function showWinToast() {
+    const existing = document.getElementById('win-toast');
+    if (existing) return;
+
+    const toast = el('div', {
+      id: 'win-toast',
+      style: {
+        position: 'fixed',
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -50%)',
+        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+        color: 'white',
+        padding: '2.5rem 4rem',
+        zIndex: 9999,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: '25px',
+        border: '2px solid #fff',
+        textAlign: 'center',
+        animation: 'fadeIn 0.5s ease-out'
+      }
+    },
+      el('img', {
+        src: './frontend/img/win.gif',
+        alt: 'Victory',
+        style: {
+          width: '200px',
+          height: '200px',
+          objectFit: 'contain',
+        }
+      }),
+      el('span', {
+        style: {
+          fontSize: '2.5rem',
+          fontWeight: '900',
+          letterSpacing: '2px',
+        }
+      }, 'Victory!'),
+      el('button', {
+        onclick: () => {
+          window.location.href = '/';           
+        }
+      }, 'Back to Home')
+    );
+
+    document.body.appendChild(toast);
+
+    const style = document.createElement('style');
+    style.innerHTML = `
+      @keyframes fadeIn {
+        0% { opacity: 0; transform: translate(-50%, -45%); }
+        100% { opacity: 1; transform: translate(-50%, -50%); }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  // --- Disconnect the player from the server ---
+  function disconnectPlayer() {
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.close();
+      console.log('Player disconnected from server after winning');
+    }
+  }
+
+  // --- Block all input using overlay ---
+  function blockAllInput() {
+    const overlay = document.createElement('div');
+    overlay.id = 'input-blocker';
+    Object.assign(overlay.style, {
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      width: '100vw',
+      height: '100vh',
+      zIndex: 9998, // below toast
+      backgroundColor: 'transparent',
+    });
+
+    // Block mouse/touch events
+    ['click','mousedown','mouseup','touchstart','touchend'].forEach(evt => {
+      overlay.addEventListener(evt, e => e.stopPropagation(), true);
+    });
+
+    // Block keyboard events
+    overlay.tabIndex = 0;
+    ['keydown','keyup','keypress'].forEach(evt => {
+      overlay.addEventListener(evt, e => e.stopPropagation(), true);
+    });
+
+    document.body.appendChild(overlay);
+    console.log('All player input blocked');
+  }
 }
 
 function renderNotFound(el) {
@@ -420,14 +563,3 @@ function renderNotFound(el) {
     el('h1', {}, '404 Not Found'),
   );
 }
-
-onPlayerDisconnect((id) => {
-  console.log(id, " disconnected callback triggered");
-  stateManager.setState(state => {
-    const updatedUsers = state.users.map(u =>
-      u.id === id ? { ...u, disconnected: true } : u
-    );
-    console.log('Updated users:', updatedUsers);
-    return { ...state, users: updatedUsers };
-  });
-});

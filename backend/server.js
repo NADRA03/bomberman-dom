@@ -168,6 +168,16 @@ wss.on('connection', (ws, req) => {
             ws.send(JSON.stringify({ type: 'map-data', grid: mapData }));
         }
 
+        if (data.type === 'check-join') {
+        // Deny if any user is playing or lobby full
+        const anyPlaying = Object.values(users).some(u => u.x !== null && u.y !== null);
+        if (anyPlaying || Object.keys(users).length >= 4) {
+            ws.send(JSON.stringify({ type: 'check-join-response', allowed: false, message: 'Game in progress or lobby full' }));
+        } else {
+            ws.send(JSON.stringify({ type: 'check-join-response', allowed: true }));
+        }
+        }
+
         if (data.type === 'new-user') {
             if (Object.keys(users).length >= 4) {
                 ws.send(JSON.stringify({ type: 'error', message: 'Lobby full (max 4 players)' }));
