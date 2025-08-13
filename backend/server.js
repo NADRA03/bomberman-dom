@@ -425,6 +425,7 @@ wss.on('connection', (ws, req) => {
             const message = {
                 type: 'chat-message',
                 room,
+                id,            
                 from: user.name,
                 text
             };
@@ -436,6 +437,7 @@ wss.on('connection', (ws, req) => {
                 }
             });
         }
+
     });
 
     ws.on('close', () => {

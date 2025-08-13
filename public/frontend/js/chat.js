@@ -10,13 +10,13 @@ let view = null;
 let room = null;
 
 export function initChat(containerSelector, roomName) {
-  onChatMessage(({ room: msgRoom, from, text }) => {
+  onChatMessage(({ room: msgRoom, from, text, id }) => {
     if (msgRoom !== room) return;
     
     chatState.setState(s => ({
-      messages: [...s.messages, { from, text }]
+      messages: [...s.messages, { from, text, id }]
     }));
-    console.log('Incoming chat message:', { from, text, room: msgRoom });
+    console.log('Incoming chat message:', { from, text, room: msgRoom, id });
   });
   
   room = roomName;
@@ -25,29 +25,104 @@ export function initChat(containerSelector, roomName) {
 }
 
 function renderChatUI(state, el) {
+  const fireBlock = () => el('img', {
+    src: './frontend/img/solid.png',
+    alt: 'fire block',
+    style: {
+      width: '24px',
+      height: '24px',
+      display: 'inline-block',
+      userSelect: 'none',
+      flexShrink: 0
+    }
+  });
+
+  const blocksPerRow = 17;  // 17 * 24 = 408px wide
+  const blocksPerColumn = 17; // same height for better vertical fit
+
+  // Container size increased to 408 to fit exactly 17 blocks * 24px
+  const containerSize = blocksPerRow * 24; // 408
+
+  // Inner messages size reduced accordingly (2 borders of 24px each)
+  const innerMessagesHeight = containerSize - 24 * 2; // 408 - 48 = 360
+  const innerMessagesWidth = containerSize - 24 * 2;  // 360
+
+  // Top fire row
+  const topFireRow = el('div', { style: { display: 'flex', gap: '0px' } },
+    Array(blocksPerRow).fill(null).map((_, i) => fireBlock())
+  );
+
+  // Bottom fire row
+  const bottomFireRow = el('div', { style: { display: 'flex', gap: '0px' } },
+    Array(blocksPerRow).fill(null).map((_, i) => fireBlock())
+  );
+
+  // Left and Right fire columns
+  const leftFireColumn = el('div', { style: { display: 'flex', flexDirection: 'column', gap: '0px' } },
+    Array(blocksPerColumn).fill(null).map((_, i) => fireBlock())
+  );
+
+  const rightFireColumn = el('div', { style: { display: 'flex', flexDirection: 'column', gap: '0px' } },
+    Array(blocksPerColumn).fill(null).map((_, i) => fireBlock())
+  );
+
   return el('div', { className: 'chat-box' },
-    el('div', { 
+    el('div', {
       className: 'chat-messages',
-      style: { 
-        height: '200px', 
-        overflowY: 'auto', 
-        border: '1px solid #ccc', 
-        padding: '10px',
-        marginBottom: '10px'
+      style: {
+        height: containerSize + 'px',
+        width: containerSize + 'px',
+        boxSizing: 'content-box',
+        display: 'flex',
+        flexDirection: 'column',
+        userSelect: 'none',
+        fontFamily: 'monospace',
+        border: 'none',
+        overflow: 'hidden',
       }
     },
-      state.messages.map((msg, index) =>
-        el('div', { 
-          key: index,
-          className: 'chat-msg',
-          style: { marginBottom: '5px' }
+      topFireRow,
+      el('div', {
+        style: {
+          display: 'flex',
+          flexGrow: 1,
+          overflow: 'hidden'
+        }
+      },
+        leftFireColumn,
+        el('div', {
+          style: {
+            height: innerMessagesHeight + 'px',
+            width: innerMessagesWidth + 'px',
+            overflowY: 'auto',
+            padding: '5px 10px',
+            boxSizing: 'border-box',
+            userSelect: 'text'
+          }
         },
-          el('strong', {}, `${msg.from}: `),
-          msg.text
-        )
-      )
+        state.messages.map((msg, index) => {
+          const id = document.cookie.match(/player_id=([^;]+)/)?.[1];
+          const isMine = msg.id === id; 
+
+          return el('div', {
+            key: index,
+            className: 'chat-msg',
+            style: {
+              marginBottom: '5px',
+              textAlign: isMine ? 'right' : 'left' 
+            }
+          },
+            el('strong', {}, `${msg.from}: `),
+            msg.text
+          );
+        })
+
+        ),
+        rightFireColumn
+      ),
+      bottomFireRow
     ),
-    el('div', { style: { display: 'flex', gap: '5px' } },
+    el('div', { style: { display: 'flex', gap: '5px', marginTop: '10px' } },
       el('input', {
         type: 'text',
         bind: 'currentInput',
@@ -68,6 +143,8 @@ function renderChatUI(state, el) {
     )
   );
 }
+
+
 
 function sendMessage() {
   const state = chatState.getState();
