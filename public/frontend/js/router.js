@@ -388,6 +388,19 @@ export function renderLobby(sm, el) {
     className: 'page-wrapper',
     style: { display: 'flex', width: '100%', maxWidth: '1200px', margin: '0 auto', height: '100vh', position: 'relative' }
   },
+      el('style', {}, `
+      @media (max-width: 768px) {
+        .lobby-content { flex: none !important; margin: 0 !important; width: 100% !important; height: auto !important; padding: 20px !important; display: flex !important; flex-direction: column !important; align-items: center !important; justify-content: center !important; }
+        .page-wrapper { flex-direction: column !important; align-items: center !important; justify-content: flex-start !important; }
+        .background-image { display: none !important; }
+        .page-wrapper > h1 { display: none !important; }
+        #user-counter { font-size: 1rem !important; }
+        .lobby-content h1 { font-size: 2rem !important; }
+        .lobby-content ul li img { width: 40px !important; height: 40px !important; }
+        #countdown-text { font-size: 1rem !important; }
+        .chat-container { width: 90% !important; max-width: 350px !important; margin-top: 20px; }
+      }
+    `),
     el('h1', { style: { position: 'absolute', top: '20px', left: '50%', transform: 'translateX(-50%)', color: 'yellow', fontSize: '100px', opacity: 0.7, zIndex: 2, textShadow: '2px 2px 4px rgba(0,0,0,1)', pointerEvents: 'none', userSelect: 'none' } }, 'BOMBERMEN'),
     el('div', { className: 'lobby-content', style: { flex: 3, padding: '40px 20px', marginRight: '340px', textAlign: 'center', position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh' } },
       el('div', { className: 'background-image', style: { position: 'absolute', top: '-100px', left: '-100px', right: '-100px', bottom: '-100px', backgroundImage: 'url("./frontend/img/bg.png")', backgroundSize: 'contain', backgroundRepeat: 'no-repeat', backgroundPosition: 'center', opacity: 0.5, pointerEvents: 'none', zIndex: 0 } }),
