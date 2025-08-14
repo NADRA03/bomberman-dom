@@ -205,38 +205,40 @@ wss.on('connection', (ws, req) => {
         }
 
         if (data.type === 'start-game') {
-            if (!users[data.id]) return;
+            const user = users[data.id];
+            if (!user) return;
 
             // --- REGENERATE MAP FOR NEW GAME ---
-            // mapData.length = 0; // clear old map
-            // const newMap = generateMapData(mapWidth, mapHeight);
-            // newMap.forEach(row => mapData.push(row));
-
-            // Generate & broadcast map only once per round
             if (!gameActive) {
                 const newMap = generateMapData(mapWidth, mapHeight);
                 mapData.length = 0;
                 newMap.forEach(row => mapData.push(row));
                 powerups.clear();
-                broadcast('map-data', { grid: mapData });
+                takenSpawns.clear(); // Reset spawn tracking
                 gameActive = true;
+                broadcast('map-data', { grid: mapData });
             }
 
-            if (takenSpawns.has(data.id)) {
-                takenSpawns.delete(data.id);
-            }
+            // Remove any old spawn entry for this player (fresh join)
+            takenSpawns.delete(data.id);
 
+            // Get an available spawn
             const spawn = getAvailableSpawn();
             if (!spawn) {
                 ws.send(JSON.stringify({ type: 'error', message: 'Game full' }));
                 return;
             }
 
-            users[data.id].x = spawn.x;
-            users[data.id].y = spawn.y;
-            users[data.id].spawn = { ...spawn };
+            // Reserve spawn before telling clients
             takenSpawns.set(data.id, spawn);
 
+            // Assign spawn to player
+            user.x = spawn.x;
+            user.y = spawn.y;
+            user.spawn = { ...spawn };
+            user.lastMoveAt = 0; // reset movement cooldown
+
+            // Send existing players list to this player
             const others = Object.values(users)
                 .filter(u => u.id !== data.id && u.x !== null && u.y !== null)
                 .map(u => ({ id: u.id, name: u.name, x: u.x, y: u.y, color: u.color }));
@@ -248,19 +250,21 @@ wss.on('connection', (ws, req) => {
                 }));
             }
 
+            // Tell this player their spawn
             ws.send(JSON.stringify({
                 type: 'spawn-position',
                 id: data.id,
                 x: spawn.x,
                 y: spawn.y,
-                color: users[data.id].color
+                color: user.color
             }));
 
+            // Tell all others about this new player
             broadcast('spawn-position', {
                 id: data.id,
                 x: spawn.x,
                 y: spawn.y,
-                color: users[data.id].color
+                color: user.color
             });
         }
 
