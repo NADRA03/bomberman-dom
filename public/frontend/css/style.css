@@ -111,6 +111,44 @@ h1 {
   border: none;
 }
 
+@media (max-width: 768px) {
+  .chat-container {
+    width: 80%;      
+    height: 80%;     
+    margin: 20px auto !important; 
+    padding: 6px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+
+  .chat-messages {
+    flex: 1 !important;
+    width: 100% !important;
+    max-height: 50% !important;
+    overflow-y: auto !important;
+    background-color: green !important;
+    border: none !important;
+  }
+
+  .chat-box {
+    width: 100% !important;     
+    height: 100% !important;
+    margin: 0 auto !important;    
+    padding: 2px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    background-color: rgba(0,0,0,0.3) !important; 
+    border-radius: 4px !important;
+  }
+}
+
+
+
+
 .chat-msg {
   padding: 4px 0;
   font-size: 20px;

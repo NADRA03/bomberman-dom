@@ -1,9 +1,11 @@
 import { StateManager, Router, ViewRenderer } from './mini-framework.js';
 import { sendUsername, onUserListUpdate, getClientId } from './wsConnect.js';
 import { onPlayerDisconnect, socket } from './wsConnect.js';
+import { stopGameTimer, gameTimerInterval } from './bomberman.js';
 
 const app = document.createElement('div');
 app.id = 'app';
+
 document.body.appendChild(app);
 
 const stateManager = new StateManager({
@@ -53,9 +55,10 @@ router.handleRoute();
 window.addEventListener('hashchange', () => router.handleRoute());
 
 function renderNameForm(sm, el) {
+
   return el('div', {
     style: {
-      position: 'relative',         
+      position: 'relative',
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
@@ -63,11 +66,49 @@ function renderNameForm(sm, el) {
       height: '100vh',
       width: '100vh',
       gap: '1rem',
-      overflow: 'hidden',                   
+      overflow: 'hidden',
     }
   },
-  
-      el('h1', {
+
+    // Mobile responsiveness styles
+el('style', {}, `
+  @media (max-width: 768px) {
+    /* Container */
+    .name-form-container {
+      width: 100% !important;
+      height: auto !important;
+      padding: 1rem;
+      box-sizing: border-box;
+    }
+    /* Title */
+    .name-form-title {
+      font-size: 50px !important;
+      top: 20px !important;
+    }
+    /* Logo */
+    .name-form-logo {
+      width: 100px !important;
+    }
+    /* Stack input & button */
+    .name-form-input-row {
+      flex-direction: column !important;
+      gap: 0.5rem !important;
+      align-items: center !important;
+    }
+    /* Limit width for input & button */
+    .name-form-input-row input,
+    .name-form-input-row button {
+      width: 80% !important;
+      max-width: 250px !important;
+    }
+    /* Hide background on small screens */
+    .background-image {
+      display: none !important;
+    }
+  }
+`),
+    el('h1', {
+      class: 'name-form-title',
       style: {
         margin: 0,
         position: 'absolute',
@@ -78,12 +119,12 @@ function renderNameForm(sm, el) {
         pointerEvents: 'none',
         zIndex: 2,
         userSelect: 'none',
-        textShadow: '2px 2px 4px rgba(0, 0, 0, 1)'  // fully opaque shadow
+        textShadow: '2px 2px 4px rgba(0, 0, 0, 1)'
       }
     }, 'BOMBERMEN'),
 
-
     el('div', {
+      class: 'background-image',
       style: {
         position: 'absolute',
         top: 0, left: 0, right: 0, bottom: 0,
@@ -98,6 +139,7 @@ function renderNameForm(sm, el) {
     }),
 
     el('div', {
+      class: 'name-form-container',
       style: {
         position: 'relative',
         zIndex: 1,
@@ -111,8 +153,8 @@ function renderNameForm(sm, el) {
       }
     },
 
-     
       el('img', {
+        class: 'name-form-logo',
         src: './frontend/img/view.gif',
         alt: 'Logo',
         style: {
@@ -123,6 +165,7 @@ function renderNameForm(sm, el) {
       el('h1', {}, 'Enter Your Name'),
 
       el('div', {
+        class: 'name-form-input-row',
         style: {
           display: 'flex',
           flexDirection: 'row',
@@ -151,6 +194,10 @@ function renderNameForm(sm, el) {
             const name = sm.getState().playerName.trim() || 'Player';
             const id = getClientId();
 
+            const entrySound = new Audio('../sound/intro.wav');
+            entrySound.volume = 0.5;
+            entrySound.play().catch(e => console.log('Audio play failed:', e));
+
             // Step 1: Ask server if joining is allowed
             socket.send(JSON.stringify({ type: 'check-join' }));
 
@@ -178,7 +225,11 @@ function renderNameForm(sm, el) {
 
             socket.addEventListener('message', handleServer);
           },
-          style: { padding: '0.5rem 1rem', fontSize: '1rem', cursor: 'pointer' }
+          style: {
+            padding: '0.5rem 1rem',
+            fontSize: '1rem',
+            cursor: 'pointer'
+          }
         }, 'Enter Lobby')
       )
     ),
@@ -187,26 +238,20 @@ function renderNameForm(sm, el) {
 
 
 
-
 function renderLobby(sm, el) {
   const state = sm.getState();
 
-  let waitTimer = null;       
-  let readyTimer = null;      
+  let waitTimer = null;
+  let readyTimer = null;
 
   function refreshUserList(users) {
-    // Remove disconnected users
     const activeUsers = users.filter(u => !u.disconnected);
-
     sm.setState({ users: activeUsers });
-
-    // Update user counter
     const counterEl = document.getElementById('user-counter');
     if (counterEl) counterEl.textContent = `Players connected: ${activeUsers.length}`;
 
-    // 2-3 players: start 20-second wait timer if not running
     if (activeUsers.length >= 2 && activeUsers.length < 4 && waitTimer == null && readyTimer == null) {
-      let waitSeconds = 3;  // developer
+      let waitSeconds = 3;
       updateCountdown(waitSeconds, 'Waiting for more players...');
       waitTimer = setInterval(() => {
         waitSeconds--;
@@ -219,16 +264,11 @@ function renderLobby(sm, el) {
       }, 1000);
     }
 
-    // 4 players: skip wait, start ready countdown immediately
     if (activeUsers.length === 4 && readyTimer == null) {
-      if (waitTimer) {
-        clearInterval(waitTimer);
-        waitTimer = null;
-      }
+      if (waitTimer) { clearInterval(waitTimer); waitTimer = null; }
       startReadyCountdown();
     }
 
-    // Reset if players < 2
     if (activeUsers.length < 2) {
       if (waitTimer) { clearInterval(waitTimer); waitTimer = null; }
       if (readyTimer) { clearInterval(readyTimer); readyTimer = null; }
@@ -241,18 +281,13 @@ function renderLobby(sm, el) {
   onPlayerDisconnect(id => {
     const s = sm.getState();
     if (!Array.isArray(s.users)) return;
-
-    // Remove the disconnected player
     const updatedUsers = s.users.filter(u => u.id !== id);
-
     sm.setState({ users: updatedUsers });
-    console.log('Player disconnected:', id, 'Updated users:', updatedUsers);
-
     refreshUserList(updatedUsers);
   });
 
   function startReadyCountdown() {
-    let countdown = 3; 
+    let countdown = 3;
     updateCountdown(countdown, 'Get ready!');
     readyTimer = setInterval(() => {
       countdown--;
@@ -264,6 +299,8 @@ function renderLobby(sm, el) {
           ...s,
           routePermission: { ...s.routePermission, play: true }
         }));
+
+        playEntrySound();
         window.location.hash = '#play';
       }
     }, 1000);
@@ -284,6 +321,54 @@ function renderLobby(sm, el) {
     className: 'page-wrapper',
     style: { display: 'flex', width: '100%', maxWidth: '1200px', margin: '0 auto', height: '100vh', position: 'relative' }
   },
+
+    // Mobile responsive styles
+el('style', {}, `
+  @media (max-width: 768px) {
+    .lobby-content {
+      flex: none !important;
+      margin: 0 !important;
+      width: 100% !important;
+      height: auto !important;
+      padding: 20px !important;
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: center !important;
+      justify-content: center !important;
+    }
+    .page-wrapper {
+      flex-direction: column !important;
+      align-items: center !important;
+      justify-content: flex-start !important;
+    }
+    .background-image {
+      display: none !important;
+    }
+    /* Hide the big BOMBERMEN title */
+    .page-wrapper > h1 {
+      display: none !important;
+    }
+    #user-counter {
+      font-size: 1rem !important;
+    }
+    .lobby-content h1 {
+      font-size: 2rem !important;
+    }
+    .lobby-content ul li img {
+      width: 40px !important;
+      height: 40px !important;
+    }
+    #countdown-text {
+      font-size: 1rem !important;
+    }
+    .chat-container {
+      width: 90% !important;
+      max-width: 350px !important;
+      margin-top: 20px;
+    }
+  }
+`),
+
 
     el('h1', {
       style: {
@@ -321,6 +406,7 @@ function renderLobby(sm, el) {
     },
 
       el('div', {
+        className: 'background-image',
         style: {
           position: 'absolute',
           top: '-100px',
@@ -340,7 +426,6 @@ function renderLobby(sm, el) {
       el('div', { style: { position: 'relative', zIndex: 1 } },
         el('h1', {}, 'Connected Players:'),
 
-        // Live user counter
         el('p', { id: 'user-counter', style: { fontSize: '1.2rem', color: 'yellow', marginBottom: '10px' } },
           `Players connected: ${state.users.length}`
         ),
@@ -378,6 +463,7 @@ function renderLobby(sm, el) {
   );
 }
 
+
 function renderPlay(sm, el, router) {
   // Keep the player list in sync
   onUserListUpdate(users => {
@@ -400,6 +486,7 @@ function renderPlay(sm, el, router) {
     const activePlayers = updatedUsers.filter(u => !u.disconnected && u.id !== getClientId());
     if (activePlayers.length === 0) {
       blockAllInput();
+      stopGameTimer();
       showWinToast();
       disconnectPlayer();
     }
@@ -420,6 +507,35 @@ function renderPlay(sm, el, router) {
     className: 'page-wrapper',
     style: { display: 'flex', height: '100vh', maxWidth: '1200px', margin: '0 auto' }
   },
+
+    //     el('style', {}, `
+    //   @media (max-width: 768px) {
+    //     .page-wrapper {
+    //       flex-direction: column !important;
+    //       height: auto !important;
+    //     }
+    //     #game-root {
+    //       min-width: 100% !important;
+    //       min-height: 300px !important;
+    //     }
+    //     .chat-container {
+    //       width: 80%% !important;
+    //       height: 50% !important;
+    //       margin-top: 40px !important;
+    //     }
+        
+    //     aside {
+    //       width: 100% !important;
+    //       margin: 0 0 10px 0 !important;
+    //       flex-direction: row !important;
+    //       overflow-x: auto !important;
+    //     }
+    //     aside ul {
+    //       display: flex !important;
+    //       gap: 8px !important;
+    //     }
+    //   }
+    // `),
     // LEFT: Player list
     el('aside', {
       style: {
@@ -495,11 +611,13 @@ function showWinToast() {
   const existing = document.getElementById('win-toast');
   if (existing) return;
 
+  stopGameTimer();
+
   // Hide the game container
-setTimeout(() => {
-  const gameRoot = document.getElementById('game-root');
-  if (gameRoot) gameRoot.style.display = 'none';
-}, 50);
+  setTimeout(() => {
+    const gameRoot = document.getElementById('game-root');
+    if (gameRoot) gameRoot.style.display = 'none';
+  }, 50);
 
   const toastSize = '300px'; // square size
 
@@ -610,3 +728,35 @@ function renderNotFound(el) {
     el('h1', {}, '404 Not Found'),
   );
 }
+
+
+let entrySound;
+
+function playEntrySound() {
+  // Stop previous sound if exists
+  if (entrySound) {
+    entrySound.pause();
+    entrySound.currentTime = 0;
+  }
+
+  entrySound = new Audio('../sound/game.mp3');
+  entrySound.volume = 0.5;
+  entrySound.loop = true; // <-- Loop continuously
+
+  entrySound.play().catch(e => console.log('Audio play failed:', e));
+}
+
+// Stop the sound when navigating back to home
+function stopEntrySound() {
+  if (entrySound) {
+    entrySound.pause();
+    entrySound.currentTime = 0;
+  }
+}
+
+
+window.addEventListener('hashchange', () => {
+  const path = window.location.hash.slice(1) || '';
+  if (path === '') stopEntrySound();
+  router.handleRoute();
+});

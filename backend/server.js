@@ -4,6 +4,7 @@ import { WebSocketServer } from 'ws';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import cookie from 'cookie';
+import os from 'os';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -140,14 +141,6 @@ function maybeSpawnPowerup(x, y) {
 }
 
 wss.on('connection', (ws, req) => {
-    const ra = req.socket.remoteAddress || '';
-    const ip = ra.startsWith('::ffff:') ? ra.replace('::ffff:', '') : ra;
-
-    if (!ip.startsWith('10.1.204.')) {
-        ws.close(1008, 'Forbidden');
-        return;
-    }
-
     const cookies = cookie.parse(req.headers.cookie || '');
     const playerId = cookies.player_id;
 
@@ -160,28 +153,26 @@ wss.on('connection', (ws, req) => {
     ws.send(JSON.stringify({ type: 'map-data', grid: mapData }));
 
     ws.on('message', (msg) => {
-        const raw = msg.toString();
-        console.log('Received raw msg:', raw);
-
         let data;
         try {
             data = JSON.parse(msg);
         } catch (err) {
-            console.error('Invalid JSON:', msg);
+            console.error('Invalid JSON:', msg.toString());
             return;
         }
 
+        // --- Handle messages (same as before) ---
         if (data.type === 'request-map') {
             ws.send(JSON.stringify({ type: 'map-data', grid: mapData }));
         }
 
         if (data.type === 'check-join') {
             const anyPlaying = Object.values(users).some(u => u.x !== null && u.y !== null);
-            if (anyPlaying || Object.keys(users).length >= 4) {
-                ws.send(JSON.stringify({ type: 'check-join-response', allowed: false, message: 'Game in progress or lobby full' }));
-            } else {
-                ws.send(JSON.stringify({ type: 'check-join-response', allowed: true }));
-            }
+            ws.send(JSON.stringify({
+                type: 'check-join-response',
+                allowed: !anyPlaying && Object.keys(users).length < 4,
+                message: anyPlaying || Object.keys(users).length >= 4 ? 'Game in progress or lobby full' : undefined
+            }));
         }
 
         if (data.type === 'new-user') {
@@ -198,12 +189,7 @@ wss.on('connection', (ws, req) => {
                 x: null,
                 y: null,
                 color: getAvailableColor(),
-                stats: {
-                    maxBombs: 1,
-                    flameRange: 1,
-                    moveIntervalMs: 100,
-                    speedLevel: 0
-                },
+                stats: { maxBombs: 1, flameRange: 1, moveIntervalMs: 100, speedLevel: 0 },
                 activeBombs: 0,
                 lastMoveAt: 0,
             };
@@ -392,6 +378,19 @@ wss.on('connection', (ws, req) => {
 app.use(express.static(path.join(__dirname, '../public')));
 
 const PORT = 8000;
-server.listen(PORT, () => {
-    console.log(`✅ HTTP + WS server running at http://10.1.204.193:${PORT}`);
+server.listen(PORT, '0.0.0.0', () => {
+    // Log all available LAN addresses
+    const interfaces = os.networkInterfaces();
+    const addresses = [];
+    for (const name of Object.keys(interfaces)) {
+        for (const iface of interfaces[name]) {
+            if (iface.family === 'IPv4' && !iface.internal) {
+                addresses.push(iface.address);
+            }
+        }
+    }
+
+    console.log(`✅ HTTP + WS server running:`);
+    addresses.forEach(ip => console.log(`   http://${ip}:${PORT}`));
+    console.log(`   Also accessible on localhost: http://localhost:${PORT}`);
 });
