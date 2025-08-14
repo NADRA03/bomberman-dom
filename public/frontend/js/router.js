@@ -238,83 +238,138 @@ el('style', {}, `
 
 
 export function renderLobby(sm, el) {
-  const state = sm.getState();
-
   let waitTimer = null;
   let readyTimer = null;
+
+  function clearTimers() {
+    if (waitTimer) { clearInterval(waitTimer); waitTimer = null; }
+    if (readyTimer) { clearInterval(readyTimer); readyTimer = null; }
+  }
+
+  // Update countdown display
+  function updateCountdownDisplay() {
+    const countdown = sm.getState().countdown;
+    const el = document.getElementById('countdown-text');
+    if (!el) return;
+    if (!countdown) el.textContent = '';
+    else if (countdown.type === 'wait') el.textContent = `Waiting for more players... ${countdown.seconds}...`;
+    else el.textContent = `Get ready! ${countdown.seconds}...`;
+  }
+
+  // Update user counter and list
+  function updateUserCounter() {
+    const users = sm.getState().users || [];
+    const counterEl = document.getElementById('user-counter');
+    if (counterEl) counterEl.textContent = `Players connected: ${users.length}`;
+
+    const ul = document.getElementById('user-list');
+    if (ul) {
+      ul.innerHTML = '';
+      users.forEach(u => {
+        const li = document.createElement('li');
+        li.style.display = 'flex';
+        li.style.alignItems = 'center';
+        li.style.gap = '10px';
+        li.style.marginBottom = '6px';
+
+        const img = document.createElement('img');
+        img.src = `frontend/img/${u.color || 'blue'}/front.png`;
+        img.alt = u.color || 'player';
+        img.style.width = '50px';
+        img.style.height = '50px';
+        img.style.imageRendering = 'pixelated';
+
+        const span = document.createElement('span');
+        span.textContent = `${u.name} (${u.status})`;
+
+        li.appendChild(img);
+        li.appendChild(span);
+        ul.appendChild(li);
+      });
+    }
+  }
+
+  // Subscribe to state changes
+  sm.subscribe(() => {
+    updateCountdownDisplay();
+    updateUserCounter();
+  });
+
+  function startWaitCountdown(forceRestart = false) {
+    const countdown = sm.getState().countdown;
+    if (countdown?.type === 'wait' && !forceRestart) return;
+
+    clearTimers();
+    sm.setState({ countdown: { type: 'wait', seconds: 20 } });
+
+    waitTimer = setInterval(() => {
+      sm.setState(s => {
+        const seconds = s.countdown.seconds - 1;
+        if (seconds <= 0) {
+          clearInterval(waitTimer);
+          waitTimer = null;
+          startReadyCountdown();
+          return { countdown: { type: 'ready', seconds: 10 } };
+        }
+        return { countdown: { ...s.countdown, seconds } };
+      });
+    }, 1000);
+  }
+
+  function startReadyCountdown(forceRestart = false) {
+    const countdown = sm.getState().countdown;
+    if (countdown?.type === 'ready' && !forceRestart) return;
+
+    clearTimers();
+    sm.setState({ countdown: { type: 'ready', seconds: 10 } });
+
+    readyTimer = setInterval(() => {
+      sm.setState(s => {
+        const seconds = s.countdown.seconds - 1;
+        if (seconds <= 0) {
+          clearInterval(readyTimer);
+          readyTimer = null;
+          sm.setState(s => ({
+            ...s,
+            routePermission: { ...s.routePermission, play: true },
+            countdown: null
+          }));
+          playEntrySound();
+          window.location.hash = '#play';
+          return { countdown: null };
+        }
+        return { countdown: { ...s.countdown, seconds } };
+      });
+    }, 1000);
+  }
 
   function refreshUserList(users) {
     const activeUsers = users.filter(u => !u.disconnected);
     sm.setState({ users: activeUsers });
 
-    const counterEl = document.getElementById('user-counter');
-    if (counterEl) counterEl.textContent = `Players connected: ${activeUsers.length}`;
-
-    // Less than 2 players → clear all timers
     if (activeUsers.length < 2) {
-      if (waitTimer) { clearInterval(waitTimer); waitTimer = null; }
-      if (readyTimer) { clearInterval(readyTimer); readyTimer = null; }
-      updateCountdown(null);
+      clearTimers();
+      sm.setState({ countdown: null });
       return;
     }
 
-    // 4th player joins → start ready countdown immediately
+    if (activeUsers.length >= 2 && activeUsers.length < 4) {
+      startWaitCountdown();
+      return;
+    }
+
     if (activeUsers.length === 4) {
-      if (waitTimer) { clearInterval(waitTimer); waitTimer = null; }
-      if (readyTimer) { clearInterval(readyTimer); readyTimer = null; }
       startReadyCountdown();
-      return;
-    }
-
-    // 2–3 players → start/continue waiting timer
-    if (activeUsers.length >= 2 && activeUsers.length < 4 && waitTimer == null && readyTimer == null) {
-      let waitSeconds = 20;
-      updateCountdown(waitSeconds, 'Waiting for more players...');
-      waitTimer = setInterval(() => {
-        waitSeconds--;
-        updateCountdown(waitSeconds, 'Waiting for more players...');
-        if (waitSeconds <= 0) {
-          clearInterval(waitTimer);
-          waitTimer = null;
-          startReadyCountdown();
-        }
-      }, 1000);
     }
   }
 
+  // Socket events
   onUserListUpdate(refreshUserList);
-
   onPlayerDisconnect(id => {
-    const s = sm.getState();
-    if (!Array.isArray(s.users)) return;
-    const updatedUsers = s.users.filter(u => u.id !== id);
+    const updatedUsers = (sm.getState().users || []).filter(u => u.id !== id);
     sm.setState({ users: updatedUsers });
     refreshUserList(updatedUsers);
   });
-
-  function startReadyCountdown() {
-    let countdown = 10;
-    updateCountdown(countdown, 'Get ready!');
-    readyTimer = setInterval(() => {
-      countdown--;
-      updateCountdown(countdown, 'Get ready!');
-      if (countdown <= 0) {
-        clearInterval(readyTimer);
-        readyTimer = null;
-        sm.setState(s => ({
-          ...s,
-          routePermission: { ...s.routePermission, play: true }
-        }));
-        playEntrySound();
-        window.location.hash = '#play';
-      }
-    }, 1000);
-  }
-
-  function updateCountdown(seconds, prefix = '') {
-    const el = document.getElementById('countdown-text');
-    if (el) el.textContent = seconds != null ? `${prefix} ${seconds}...` : '';
-  }
 
   // Initialize chat
   setTimeout(() => {
@@ -322,110 +377,33 @@ export function renderLobby(sm, el) {
     if (chatRoot) import('./chat.js').then(mod => mod.initChat('#chat-root', 'lobby'));
   }, 0);
 
+  // Start countdown if 2+ players already connected
+  if ((sm.getState().users || []).length >= 2 && !sm.getState().countdown) {
+    startWaitCountdown();
+  }
+
+  const state = sm.getState();
+
   return el('div', {
     className: 'page-wrapper',
     style: { display: 'flex', width: '100%', maxWidth: '1200px', margin: '0 auto', height: '100vh', position: 'relative' }
   },
-
-    // Mobile responsive styles
-    el('style', {}, `
-      @media (max-width: 768px) {
-        .lobby-content { flex: none !important; margin: 0 !important; width: 100% !important; height: auto !important; padding: 20px !important; display: flex !important; flex-direction: column !important; align-items: center !important; justify-content: center !important; }
-        .page-wrapper { flex-direction: column !important; align-items: center !important; justify-content: flex-start !important; }
-        .background-image { display: none !important; }
-        .page-wrapper > h1 { display: none !important; }
-        #user-counter { font-size: 1rem !important; }
-        .lobby-content h1 { font-size: 2rem !important; }
-        .lobby-content ul li img { width: 40px !important; height: 40px !important; }
-        #countdown-text { font-size: 1rem !important; }
-        .chat-container { width: 90% !important; max-width: 350px !important; margin-top: 20px; }
-      }
-    `),
-
-    el('h1', {
-      style: {
-        margin: 0,
-        position: 'absolute',
-        color: 'yellow',
-        fontSize: '100px',
-        top: '20px',
-        left: '50%',
-        transform: 'translateX(-50%)',
-        opacity: 0.7,
-        pointerEvents: 'none',
-        zIndex: 2,
-        userSelect: 'none',
-        textShadow: '2px 2px 4px rgba(0,0,0,1)'
-      }
-    }, 'BOMBERMEN'),
-
-    el('div', {
-      className: 'lobby-content',
-      style: {
-        flex: 3,
-        padding: '40px 20px',
-        marginRight: '340px',
-        textAlign: 'center',
-        justifyContent: 'center',
-        position: 'relative',
-        overflow: 'visible',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        height: '100vh'
-      }
-    },
-
-      el('div', {
-        className: 'background-image',
-        style: {
-          position: 'absolute',
-          top: '-100px',
-          left: '-100px',
-          right: '-100px',
-          bottom: '-100px',
-          backgroundImage: 'url("./frontend/img/bg.png")',
-          backgroundSize: 'contain',
-          backgroundRepeat: 'no-repeat',
-          backgroundPosition: 'center',
-          opacity: 0.5,
-          pointerEvents: 'none',
-          zIndex: 0
-        }
-      }),
-
+    el('h1', { style: { position: 'absolute', top: '20px', left: '50%', transform: 'translateX(-50%)', color: 'yellow', fontSize: '100px', opacity: 0.7, zIndex: 2, textShadow: '2px 2px 4px rgba(0,0,0,1)', pointerEvents: 'none', userSelect: 'none' } }, 'BOMBERMEN'),
+    el('div', { className: 'lobby-content', style: { flex: 3, padding: '40px 20px', marginRight: '340px', textAlign: 'center', position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh' } },
+      el('div', { className: 'background-image', style: { position: 'absolute', top: '-100px', left: '-100px', right: '-100px', bottom: '-100px', backgroundImage: 'url("./frontend/img/bg.png")', backgroundSize: 'contain', backgroundRepeat: 'no-repeat', backgroundPosition: 'center', opacity: 0.5, pointerEvents: 'none', zIndex: 0 } }),
       el('div', { style: { position: 'relative', zIndex: 1 } },
         el('h1', {}, 'Connected Players:'),
         el('p', { id: 'user-counter', style: { fontSize: '1.2rem', color: 'yellow', marginBottom: '10px' } }, `Players connected: ${state.users.length}`),
-        el('ul', {}, state.users.map(u =>
+        el('ul', { id: 'user-list' }, state.users.map(u =>
           el('li', { style: { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' } },
-            el('img', {
-              src: `frontend/img/${u.color || 'blue'}/front.png`,
-              alt: u.color || 'player',
-              style: { width: '50px', height: '50px', imageRendering: 'pixelated' }
-            }),
+            el('img', { src: `frontend/img/${u.color || 'blue'}/front.png`, alt: u.color || 'player', style: { width: '50px', height: '50px', imageRendering: 'pixelated' } }),
             el('span', {}, `${u.name} (${u.status})`)
           )
         )),
-        el('p', { id: 'countdown-text' }, '')
+        el('p', { id: 'countdown-text' }, state.countdown ? `${state.countdown.type === 'wait' ? 'Waiting...' : 'Get ready!'} ${state.countdown.seconds}` : '')
       )
     ),
-
-    el('aside', {
-      id: 'chat-root',
-      className: 'chat-container',
-      style: {
-        flex: 1,
-        padding: '10px',
-        color: '#fff',
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'center',
-        height: '100vh',
-        boxSizing: 'border-box'
-      }
-    })
+    el('aside', { id: 'chat-root', className: 'chat-container', style: { flex: 1, padding: '10px', color: '#fff', display: 'flex', flexDirection: 'column', justifyContent: 'center', height: '100vh', boxSizing: 'border-box' } })
   );
 }
 
