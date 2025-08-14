@@ -1,7 +1,6 @@
 import { StateManager, Router, ViewRenderer } from './mini-framework.js';
 import { sendUsername, onUserListUpdate, getClientId } from './wsConnect.js';
 import { onPlayerDisconnect, socket } from './wsConnect.js';
-import { stopGameTimer, gameTimerInterval } from './bomberman.js';
 
 const app = document.createElement('div');
 app.id = 'app';
@@ -486,7 +485,6 @@ function renderPlay(sm, el, router) {
     const activePlayers = updatedUsers.filter(u => !u.disconnected && u.id !== getClientId());
     if (activePlayers.length === 0) {
       blockAllInput();
-      stopGameTimer();
       showWinToast();
       disconnectPlayer();
     }
@@ -611,7 +609,6 @@ function showWinToast() {
   const existing = document.getElementById('win-toast');
   if (existing) return;
 
-  stopGameTimer();
 
   // Hide the game container
   setTimeout(() => {
