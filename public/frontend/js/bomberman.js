@@ -215,9 +215,9 @@ onPowerupPicked(({ id, by, type, newMaxBombs, newFlameRange, newMoveIntervalMs, 
         if (type === 'flames' && newFlameRange != null) {
             state.setState({ stats: { ...s.stats, flameRange: newFlameRange } });
         }
-        // if (type === 'speed' && newMoveIntervalMs != null) {
-        //     state.setState({ stats: { ...s.stats, moveIntervalMs: newMoveIntervalMs, speedLevel: newSpeedLevel ?? s.stats.speedLevel } });
-        // }
+        if (type === 'speed' && newMoveIntervalMs != null) {
+            state.setState({ stats: { ...s.stats, moveIntervalMs: newMoveIntervalMs, speedLevel: newSpeedLevel ?? s.stats.speedLevel } });
+        }
 
         // Make sure powerupContainer exists before appending icon
         if (s.powerupContainer && !s.collectedPowerups.includes(type)) {
@@ -243,10 +243,10 @@ onPowerupPicked(({ id, by, type, newMaxBombs, newFlameRange, newMoveIntervalMs, 
         const patch = { ...curr };
         if (type === 'bombs' && newMaxBombs != null) patch.maxBombs = newMaxBombs;
         if (type === 'flames' && newFlameRange != null) patch.flameRange = newFlameRange;
-        // if (type === 'speed' && newMoveIntervalMs != null) {
-        //     patch.moveIntervalMs = newMoveIntervalMs;
-        //     patch.speedLevel = newSpeedLevel ?? curr.speedLevel;
-        // }
+        if (type === 'speed' && newMoveIntervalMs != null) {
+            patch.moveIntervalMs = newMoveIntervalMs;
+            patch.speedLevel = newSpeedLevel ?? curr.speedLevel;
+        }
         state.setState({ remoteStats: { ...s.remoteStats, [by]: patch } });
     }
 });
@@ -668,8 +668,10 @@ function stepMovement() {
     tryPickupPowerup();
 }
 
-function showToast(message, duration = 3000) {
-    // Create overlay to block all interactions
+let activeToast = null;
+
+export function showToast(message, duration = 3000) {
+    // Overlay (create once)
     let overlay = document.getElementById('toast-overlay');
     if (!overlay) {
         overlay = document.createElement('div');
@@ -685,24 +687,16 @@ function showToast(message, duration = 3000) {
             pointerEvents: 'auto',
         });
 
-        // Block pointer events
-        overlay.addEventListener('click', e => e.stopPropagation(), true);
-        overlay.addEventListener('mousedown', e => e.stopPropagation(), true);
-        overlay.addEventListener('mouseup', e => e.stopPropagation(), true);
-        overlay.addEventListener('touchstart', e => e.stopPropagation(), true);
-        overlay.addEventListener('touchend', e => e.stopPropagation(), true);
+        // Block pointer & keyboard events
+        ['click','mousedown','mouseup','touchstart','touchend','keydown','keyup','keypress']
+            .forEach(evt => overlay.addEventListener(evt, e => e.stopPropagation(), true));
 
-        // Block keyboard events
-        overlay.tabIndex = 0; // make focusable
-        overlay.addEventListener('keydown', e => e.stopPropagation(), true);
-        overlay.addEventListener('keyup', e => e.stopPropagation(), true);
-        overlay.addEventListener('keypress', e => e.stopPropagation(), true);
-
+        overlay.tabIndex = 0;
         document.body.appendChild(overlay);
         overlay.focus();
     }
 
-    // Toast container
+    // Toast container (create once)
     let toastContainer = document.getElementById('toast-container');
     if (!toastContainer) {
         toastContainer = document.createElement('div');
@@ -721,7 +715,13 @@ function showToast(message, duration = 3000) {
         document.body.appendChild(toastContainer);
     }
 
-    // Create toast element
+    // Remove existing toast immediately if any
+    if (activeToast) {
+        activeToast.remove();
+        activeToast = null;
+    }
+
+    // Create new toast
     const toast = document.createElement('div');
     toast.textContent = message;
     Object.assign(toast.style, {
@@ -736,21 +736,23 @@ function showToast(message, duration = 3000) {
     });
 
     toastContainer.appendChild(toast);
+    activeToast = toast;
 
     // Fade in
-    requestAnimationFrame(() => {
-        toast.style.opacity = '1';
-    });
+    requestAnimationFrame(() => toast.style.opacity = '1');
 
-    // Remove toast and overlay after duration
+    // Fade out after duration
     setTimeout(() => {
         toast.style.opacity = '0';
         toast.addEventListener('transitionend', () => {
-            toast.remove();
-            if (overlay) overlay.remove();
-        });
+            if (toast === activeToast) {
+                toast.remove();
+                activeToast = null;
+            }
+        }, { once: true });
     }, duration);
 }
+
 
 function handleGameOver() {
     showToast("Game Over! You ran out of lives.", 4000);
