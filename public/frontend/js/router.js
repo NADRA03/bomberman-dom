@@ -237,7 +237,7 @@ el('style', {}, `
 
 
 
-function renderLobby(sm, el) {
+export function renderLobby(sm, el) {
   const state = sm.getState();
 
   let waitTimer = null;
@@ -246,11 +246,29 @@ function renderLobby(sm, el) {
   function refreshUserList(users) {
     const activeUsers = users.filter(u => !u.disconnected);
     sm.setState({ users: activeUsers });
+
     const counterEl = document.getElementById('user-counter');
     if (counterEl) counterEl.textContent = `Players connected: ${activeUsers.length}`;
 
+    // Less than 2 players → clear all timers
+    if (activeUsers.length < 2) {
+      if (waitTimer) { clearInterval(waitTimer); waitTimer = null; }
+      if (readyTimer) { clearInterval(readyTimer); readyTimer = null; }
+      updateCountdown(null);
+      return;
+    }
+
+    // 4th player joins → start ready countdown immediately
+    if (activeUsers.length === 4) {
+      if (waitTimer) { clearInterval(waitTimer); waitTimer = null; }
+      if (readyTimer) { clearInterval(readyTimer); readyTimer = null; }
+      startReadyCountdown();
+      return;
+    }
+
+    // 2–3 players → start/continue waiting timer
     if (activeUsers.length >= 2 && activeUsers.length < 4 && waitTimer == null && readyTimer == null) {
-      let waitSeconds = 3;
+      let waitSeconds = 20;
       updateCountdown(waitSeconds, 'Waiting for more players...');
       waitTimer = setInterval(() => {
         waitSeconds--;
@@ -261,17 +279,6 @@ function renderLobby(sm, el) {
           startReadyCountdown();
         }
       }, 1000);
-    }
-
-    if (activeUsers.length === 4 && readyTimer == null) {
-      if (waitTimer) { clearInterval(waitTimer); waitTimer = null; }
-      startReadyCountdown();
-    }
-
-    if (activeUsers.length < 2) {
-      if (waitTimer) { clearInterval(waitTimer); waitTimer = null; }
-      if (readyTimer) { clearInterval(readyTimer); readyTimer = null; }
-      updateCountdown(null);
     }
   }
 
@@ -286,7 +293,7 @@ function renderLobby(sm, el) {
   });
 
   function startReadyCountdown() {
-    let countdown = 3;
+    let countdown = 10;
     updateCountdown(countdown, 'Get ready!');
     readyTimer = setInterval(() => {
       countdown--;
@@ -298,7 +305,6 @@ function renderLobby(sm, el) {
           ...s,
           routePermission: { ...s.routePermission, play: true }
         }));
-
         playEntrySound();
         window.location.hash = '#play';
       }
@@ -322,52 +328,19 @@ function renderLobby(sm, el) {
   },
 
     // Mobile responsive styles
-el('style', {}, `
-  @media (max-width: 768px) {
-    .lobby-content {
-      flex: none !important;
-      margin: 0 !important;
-      width: 100% !important;
-      height: auto !important;
-      padding: 20px !important;
-      display: flex !important;
-      flex-direction: column !important;
-      align-items: center !important;
-      justify-content: center !important;
-    }
-    .page-wrapper {
-      flex-direction: column !important;
-      align-items: center !important;
-      justify-content: flex-start !important;
-    }
-    .background-image {
-      display: none !important;
-    }
-    /* Hide the big BOMBERMEN title */
-    .page-wrapper > h1 {
-      display: none !important;
-    }
-    #user-counter {
-      font-size: 1rem !important;
-    }
-    .lobby-content h1 {
-      font-size: 2rem !important;
-    }
-    .lobby-content ul li img {
-      width: 40px !important;
-      height: 40px !important;
-    }
-    #countdown-text {
-      font-size: 1rem !important;
-    }
-    .chat-container {
-      width: 90% !important;
-      max-width: 350px !important;
-      margin-top: 20px;
-    }
-  }
-`),
-
+    el('style', {}, `
+      @media (max-width: 768px) {
+        .lobby-content { flex: none !important; margin: 0 !important; width: 100% !important; height: auto !important; padding: 20px !important; display: flex !important; flex-direction: column !important; align-items: center !important; justify-content: center !important; }
+        .page-wrapper { flex-direction: column !important; align-items: center !important; justify-content: flex-start !important; }
+        .background-image { display: none !important; }
+        .page-wrapper > h1 { display: none !important; }
+        #user-counter { font-size: 1rem !important; }
+        .lobby-content h1 { font-size: 2rem !important; }
+        .lobby-content ul li img { width: 40px !important; height: 40px !important; }
+        #countdown-text { font-size: 1rem !important; }
+        .chat-container { width: 90% !important; max-width: 350px !important; margin-top: 20px; }
+      }
+    `),
 
     el('h1', {
       style: {
@@ -424,23 +397,17 @@ el('style', {}, `
 
       el('div', { style: { position: 'relative', zIndex: 1 } },
         el('h1', {}, 'Connected Players:'),
-
-        el('p', { id: 'user-counter', style: { fontSize: '1.2rem', color: 'yellow', marginBottom: '10px' } },
-          `Players connected: ${state.users.length}`
-        ),
-
-        el('ul', {},
-          state.users.map(u =>
-            el('li', { style: { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' } },
-              el('img', {
-                src: `frontend/img/${u.color || 'blue'}/front.png`,
-                alt: u.color || 'player',
-                style: { width: '50px', height: '50px', imageRendering: 'pixelated' }
-              }),
-              el('span', {}, `${u.name} (${u.status})`)
-            )
+        el('p', { id: 'user-counter', style: { fontSize: '1.2rem', color: 'yellow', marginBottom: '10px' } }, `Players connected: ${state.users.length}`),
+        el('ul', {}, state.users.map(u =>
+          el('li', { style: { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' } },
+            el('img', {
+              src: `frontend/img/${u.color || 'blue'}/front.png`,
+              alt: u.color || 'player',
+              style: { width: '50px', height: '50px', imageRendering: 'pixelated' }
+            }),
+            el('span', {}, `${u.name} (${u.status})`)
           )
-        ),
+        )),
         el('p', { id: 'countdown-text' }, '')
       )
     ),

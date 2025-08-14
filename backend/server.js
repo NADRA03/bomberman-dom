@@ -272,10 +272,10 @@ wss.on('connection', (ws, req) => {
             const u = users[data.id];
             if (!u) return;
 
-            const now = Date.now();
-            const MOVE_INTERVAL_MS = u.stats?.moveIntervalMs ?? 100;
-            if (u.lastMoveAt && now - u.lastMoveAt < MOVE_INTERVAL_MS) return;
-            u.lastMoveAt = now;
+            // const now = Date.now();
+            // const MOVE_INTERVAL_MS = u.stats?.moveIntervalMs ?? 100;
+            // if (u.lastMoveAt && now - u.lastMoveAt < MOVE_INTERVAL_MS) return;
+            // u.lastMoveAt = now;
 
             const dx = Math.abs((data.x ?? u.x) - (u.x ?? 0));
             const dy = Math.abs((data.y ?? u.y) - (u.y ?? 0));

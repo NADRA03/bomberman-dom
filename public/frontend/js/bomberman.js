@@ -56,7 +56,7 @@ const state = new StateManager({
     powerups: [],
     collectedPowerups: [],
 
-    stats: { maxBombs: 1, flameRange: 1, moveIntervalMs: 120, speedLevel: 0 },
+    stats: { maxBombs: 1, flameRange: 1, moveIntervalMs: 250, speedLevel: 0 },
 
     gameTimeLeft: 180 //////////////////developer
 });
@@ -197,59 +197,59 @@ export function startGame(container) {
         state.setState({ powerups: next });
     });
 
-    onPowerupPicked(({ id, by, type, newMaxBombs, newFlameRange, newMoveIntervalMs, newSpeedLevel }) => {
-        const s = state.getState();
-        const puIndex = s.powerups.findIndex(p => p.id === id);
-        if (puIndex !== -1) {
-            s.powerups[puIndex].element?.remove();
-            const next = s.powerups.slice();
-            next.splice(puIndex, 1);
-            state.setState({ powerups: next });
+onPowerupPicked(({ id, by, type, newMaxBombs, newFlameRange, newMoveIntervalMs, newSpeedLevel }) => {
+    const s = state.getState();
+    const puIndex = s.powerups.findIndex(p => p.id === id);
+    if (puIndex !== -1) {
+        s.powerups[puIndex].element?.remove();
+        const next = s.powerups.slice();
+        next.splice(puIndex, 1);
+        state.setState({ powerups: next });
+    }
+
+    if (by === getClientId()) {
+        // Update stats as before
+        if (type === 'bombs' && newMaxBombs != null) {
+            state.setState({ stats: { ...s.stats, maxBombs: newMaxBombs } });
         }
-
-        if (by === getClientId()) {
-            // Update stats as before
-            if (type === 'bombs' && newMaxBombs != null) {
-                state.setState({ stats: { ...s.stats, maxBombs: newMaxBombs } });
-            }
-            if (type === 'flames' && newFlameRange != null) {
-                state.setState({ stats: { ...s.stats, flameRange: newFlameRange } });
-            }
-            if (type === 'speed' && newMoveIntervalMs != null) {
-                state.setState({ stats: { ...s.stats, moveIntervalMs: newMoveIntervalMs, speedLevel: newSpeedLevel ?? s.stats.speedLevel } });
-            }
-
-            // Make sure powerupContainer exists before appending icon
-            if (s.powerupContainer && !s.collectedPowerups.includes(type)) {
-                const iconByType = {
-                    bombs: 'frontend/img/bombPlusOne.png',
-                    flames: 'frontend/img/flamesPlusOne.png',
-                    speed: 'frontend/img/speedUp.png'
-                };
-                const iconUrl = iconByType[type] || 'frontend/img/bombPlusOne.png';
-                const icon = view.el('img', {
-                    src: iconUrl,
-                    style: { width: '30px', height: '30px' }
-                });
-
-                s.powerupContainer.appendChild(icon);
-
-                // Update collectedPowerups immutably
-                const newCollected = [...s.collectedPowerups, type];
-                state.setState({ collectedPowerups: newCollected });
-            }
-        } else {
-            const curr = s.remoteStats[by] || {};
-            const patch = { ...curr };
-            if (type === 'bombs' && newMaxBombs != null) patch.maxBombs = newMaxBombs;
-            if (type === 'flames' && newFlameRange != null) patch.flameRange = newFlameRange;
-            if (type === 'speed' && newMoveIntervalMs != null) {
-                patch.moveIntervalMs = newMoveIntervalMs;
-                patch.speedLevel = newSpeedLevel ?? curr.speedLevel;
-            }
-            state.setState({ remoteStats: { ...s.remoteStats, [by]: patch } });
+        if (type === 'flames' && newFlameRange != null) {
+            state.setState({ stats: { ...s.stats, flameRange: newFlameRange } });
         }
-    });
+        // if (type === 'speed' && newMoveIntervalMs != null) {
+        //     state.setState({ stats: { ...s.stats, moveIntervalMs: newMoveIntervalMs, speedLevel: newSpeedLevel ?? s.stats.speedLevel } });
+        // }
+
+        // Make sure powerupContainer exists before appending icon
+        if (s.powerupContainer && !s.collectedPowerups.includes(type)) {
+            const iconByType = {
+                bombs: 'frontend/img/bombPlusOne.png',
+                flames: 'frontend/img/flamesPlusOne.png',
+                speed: 'frontend/img/speedUp.png'
+            };
+            const iconUrl = iconByType[type] || 'frontend/img/bombPlusOne.png';
+            const icon = view.el('img', {
+                src: iconUrl,
+                style: { width: '30px', height: '30px' }
+            });
+
+            s.powerupContainer.appendChild(icon);
+
+            // Update collectedPowerups immutably
+            const newCollected = [...s.collectedPowerups, type];
+            state.setState({ collectedPowerups: newCollected });
+        }
+    } else {
+        const curr = s.remoteStats[by] || {};
+        const patch = { ...curr };
+        if (type === 'bombs' && newMaxBombs != null) patch.maxBombs = newMaxBombs;
+        if (type === 'flames' && newFlameRange != null) patch.flameRange = newFlameRange;
+        // if (type === 'speed' && newMoveIntervalMs != null) {
+        //     patch.moveIntervalMs = newMoveIntervalMs;
+        //     patch.speedLevel = newSpeedLevel ?? curr.speedLevel;
+        // }
+        state.setState({ remoteStats: { ...s.remoteStats, [by]: patch } });
+    }
+});
 
 
     const loop = new GameLoop(() => {
@@ -635,44 +635,38 @@ let movedThisPress = { up: false, down: false, left: false, right: false };
 let holdStartAt = { up: 0, down: 0, left: 0, right: 0 };
 
 function stepMovement() {
-    const now = performance.now();
     const s = state.getState();
-
-    const interval = Math.max(MIN_INTERVAL_MS, s.stats?.moveIntervalMs ?? 120);
-
     const { bomber, grid, mapWidth, mapHeight } = s;
 
     let dir = null, dx = 0, dy = 0;
-    if (keysDown.up) { dir = 'up'; dy = -1; bomber.direction = 'up'; }
-    else if (keysDown.down) { dir = 'down'; dy = 1; bomber.direction = 'down'; }
-    else if (keysDown.left) { dir = 'left'; dx = -1; bomber.direction = 'left'; }
-    else if (keysDown.right) { dir = 'right'; dx = 1; bomber.direction = 'right'; }
-    else return;
 
-    const firstMove = !movedThisPress[dir];
-    const heldFor = now - holdStartAt[dir];
-    const canRepeat = heldFor >= HOLD_REPEAT_DELAY_MS && (now - lastMoveAt) >= interval;
-    const canMoveNow = firstMove || canRepeat;
-    if (!canMoveNow) return;
+    if (keysDown.up && !movedThisPress.up) { dir = 'up'; dy = -1; bomber.direction = 'up'; }
+    else if (keysDown.down && !movedThisPress.down) { dir = 'down'; dy = 1; bomber.direction = 'down'; }
+    else if (keysDown.left && !movedThisPress.left) { dir = 'left'; dx = -1; bomber.direction = 'left'; }
+    else if (keysDown.right && !movedThisPress.right) { dir = 'right'; dx = 1; bomber.direction = 'right'; }
+    else return; // No new press, no move
 
+    // Calculate next position
     const nextX = bomber.x + dx;
     const nextY = bomber.y + dy;
+
+    // Bounds check
     if (nextX < 0 || nextX >= mapWidth || nextY < 0 || nextY >= mapHeight) return;
 
+    // Collision check
     const cell = grid[nextY][nextX];
     if (cell === 1 || cell === 2) return;
 
+    // Move player
     bomber.x = nextX;
     bomber.y = nextY;
 
-    movedThisPress[dir] = true;
-    lastMoveAt = now;
+    movedThisPress[dir] = true; // Mark as moved for this key press
 
     update();
     sendMovement(nextX, nextY);
     tryPickupPowerup();
 }
-
 
 function showToast(message, duration = 3000) {
     // Create overlay to block all interactions
