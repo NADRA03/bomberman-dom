@@ -8,14 +8,14 @@ app.id = 'app';
 document.body.appendChild(app);
 
 const stateManager = new StateManager({
-  devMode: true,
+  devMode: false,
   playerName: '',
   users: [],
   countdown: null,
   userRegistered: false,
   routePermission: {
-    lobby: true,
-    play: true
+    lobby: false,
+    play: false
   }
 });
 
@@ -295,28 +295,27 @@ export function renderLobby(sm, el) {
     updateUserCounter();
   });
 
-  function startWaitCountdown(forceRestart = false) {
-    const countdown = sm.getState().countdown;
-    if (countdown?.type === 'wait' && !forceRestart) return;
+function startWaitCountdown() {
+  clearTimers();
+  sm.setState({ countdown: { type: 'wait', seconds: 20 } });
+  updateCountdownDisplay(); // <- force update immediately
 
-    clearTimers();
-    sm.setState({ countdown: { type: 'wait', seconds: 20 } });
+  waitTimer = setInterval(() => {
+    sm.setState(s => {
+      const seconds = s.countdown.seconds - 1;
+      if (seconds <= 0) {
+        clearInterval(waitTimer);
+        waitTimer = null;
+        startReadyCountdown();
+        return { countdown: { type: 'ready', seconds: 10 } };
+      }
+      return { countdown: { ...s.countdown, seconds } };
+    });
+  }, 1000);
+}
 
-    waitTimer = setInterval(() => {
-      sm.setState(s => {
-        const seconds = s.countdown.seconds - 1;
-        if (seconds <= 0) {
-          clearInterval(waitTimer);
-          waitTimer = null;
-          startReadyCountdown();
-          return { countdown: { type: 'ready', seconds: 10 } };
-        }
-        return { countdown: { ...s.countdown, seconds } };
-      });
-    }, 1000);
-  }
 
-  function startReadyCountdown(forceRestart = false) {
+function startReadyCountdown(forceRestart = false) {
     const countdown = sm.getState().countdown;
     if (countdown?.type === 'ready' && !forceRestart) return;
 
@@ -343,25 +342,30 @@ export function renderLobby(sm, el) {
     }, 1000);
   }
 
-  function refreshUserList(users) {
-    const activeUsers = users.filter(u => !u.disconnected);
-    sm.setState({ users: activeUsers });
+function refreshUserList(users) {
+  const activeUsers = users.filter(u => !u.disconnected);
+  sm.setState({ users: activeUsers });
 
-    if (activeUsers.length < 2) {
-      clearTimers();
-      sm.setState({ countdown: null });
-      return;
-    }
-
-    if (activeUsers.length >= 2 && activeUsers.length < 4) {
-      startWaitCountdown();
-      return;
-    }
-
-    if (activeUsers.length === 4) {
-      startReadyCountdown();
-    }
+  // If less than 2, clear timers
+  if (activeUsers.length < 2) {
+    clearTimers();
+    sm.setState({ countdown: null });
+    return;
   }
+
+  // 4 players? start ready countdown
+  if (activeUsers.length === 4) {
+    startReadyCountdown(); // will reset and start ready timer
+    updateCountdownDisplay(); // force immediate update
+    return;
+  }
+
+  // 2-3 players? start wait countdown
+  if (activeUsers.length >= 2 && activeUsers.length < 4) {
+    startWaitCountdown(); // will reset and start wait timer
+    updateCountdownDisplay(); // force immediate update
+  }
+}
 
   // Socket events
   onUserListUpdate(refreshUserList);
@@ -401,7 +405,7 @@ export function renderLobby(sm, el) {
         .chat-container { width: 90% !important; max-width: 350px !important; margin-top: 20px; }
       }
     `),
-    el('h1', { style: { position: 'absolute', top: '20px', left: '50%', transform: 'translateX(-50%)', color: 'yellow', fontSize: '100px', opacity: 0.7, zIndex: 2, textShadow: '2px 2px 4px rgba(0,0,0,1)', pointerEvents: 'none', userSelect: 'none' } }, 'BOMBERMEN'),
+    el('h1', { style: { position: 'absolute', top: '10px', left: '50%', transform: 'translateX(-50%)', color: 'yellow', fontSize: '100px', opacity: 0.7, zIndex: 2, textShadow: '2px 2px 4px rgba(0,0,0,1)', pointerEvents: 'none', userSelect: 'none' } }, 'BOMBERMEN'),
     el('div', { className: 'lobby-content', style: { flex: 3, padding: '40px 20px', marginRight: '340px', textAlign: 'center', position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh' } },
       el('div', { className: 'background-image', style: { position: 'absolute', top: '-100px', left: '-100px', right: '-100px', bottom: '-100px', backgroundImage: 'url("./frontend/img/bg.png")', backgroundSize: 'contain', backgroundRepeat: 'no-repeat', backgroundPosition: 'center', opacity: 0.5, pointerEvents: 'none', zIndex: 0 } }),
       el('div', { style: { position: 'relative', zIndex: 1 } },
