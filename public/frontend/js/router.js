@@ -468,34 +468,52 @@ function renderPlay(sm, el, router) {
     style: { display: 'flex', height: '100vh', maxWidth: '1200px', margin: '0 auto' }
   },
 
-    //     el('style', {}, `
-    //   @media (max-width: 768px) {
-    //     .page-wrapper {
-    //       flex-direction: column !important;
-    //       height: auto !important;
-    //     }
-    //     #game-root {
-    //       min-width: 100% !important;
-    //       min-height: 300px !important;
-    //     }
-    //     .chat-container {
-    //       width: 80%% !important;
-    //       height: 50% !important;
-    //       margin-top: 40px !important;
-    //     }
-        
-    //     aside {
-    //       width: 100% !important;
-    //       margin: 0 0 10px 0 !important;
-    //       flex-direction: row !important;
-    //       overflow-x: auto !important;
-    //     }
-    //     aside ul {
-    //       display: flex !important;
-    //       gap: 8px !important;
-    //     }
-    //   }
-    // `),
+el('style', {}, `
+@media (max-width: 768px) {
+  .page-wrapper {
+    flex-direction: column !important;
+    align-items: flex-start !important;   /* children align to left */
+    justify-content: flex-start !important;
+    max-width: 100% !important;
+    padding: 0 10px !important;           /* optional side padding */
+  }
+
+  #game-root {
+    background-color: transparent;
+    margin: 0 !important; /* no auto centering */
+    top: 10%;
+    min-width: auto !important;
+    min-height: 250px !important;
+    transform: scale(0.5);
+    transform-origin: top left;           /* start from left */
+    overflow: visible !important;
+    order: 1;
+    flex: none !important;
+  }
+
+.chat-container {
+  width: 90% !important;
+  height: 80% !important;
+  max-width: 350px !important;
+  margin: 65% auto 0 auto !important;  /* top spacing + center horizontally */
+  order: 2;
+  flex: none !important;
+}
+
+  aside {
+    display: none !important;             /* hide player list on mobile */
+  }
+}
+
+@media (max-width: 480px) {
+  #game-root {
+    transform: scale(0.65);               /* smaller screen scaling */
+    min-height: 200px !important;
+  }
+}
+`),
+
+
     // LEFT: Player list
     el('aside', {
       style: {
