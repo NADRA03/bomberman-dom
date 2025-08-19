@@ -66,6 +66,7 @@ const view = new ViewRenderer('#game-root');
 export function startGame(container) {
     state.setState({ container });
     requestMap();
+    console.log("map requested");
 
     onSpawnPosition(({ x, y, color }) => {
         const s = state.getState();

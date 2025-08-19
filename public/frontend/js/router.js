@@ -14,7 +14,7 @@ const stateManager = new StateManager({
   countdown: null,
   userRegistered: false,
   routePermission: {
-    lobby: false,
+    lobby: true,
     play: true
   }
 });
@@ -28,8 +28,8 @@ const renderApp = (state, el) => {
 
   // --- Route guard: redirect to root if not registered ---
   if (!state.userRegistered && path !== '') {
-    // window.location.hash = '#';   
-    // return renderNameForm(stateManager, el);
+    window.location.hash = '#';   
+    return renderNameForm(stateManager, el);
   }
 
   if (path === '') return renderNameForm(stateManager, el);
@@ -40,6 +40,8 @@ const renderApp = (state, el) => {
   }
 
   if (path === 'play') {
+    const gameRootExists = !!document.getElementById('game-root');
+    if (gameRootExists) return; 
     if (state.routePermission.play || state.devMode) return renderPlay(stateManager, el, router);
     return renderNotFound(el);
   }
@@ -236,9 +238,8 @@ el('style', {}, `
 }
 
 export function renderLobby(sm, el) {
-  // Update countdown display
-  function updateCountdownDisplay() {
-    const countdown = sm.getState().countdown;
+  // Update countdown display directly
+  function updateCountdownDisplay(countdown) {
     const countdownEl = document.getElementById('countdown-text');
     if (!countdownEl) return;
 
@@ -286,9 +287,8 @@ export function renderLobby(sm, el) {
     }
   }
 
-  // Subscribe to state changes
+  // Subscribe to state changes for users only (no countdown)
   sm.subscribe(() => {
-    updateCountdownDisplay();
     updateUserCounter();
     updateUserList();
   });
@@ -308,27 +308,28 @@ export function renderLobby(sm, el) {
     refreshUserList(updatedUsers);
   });
 
+  // Countdown now only updates the DOM directly
   onCountdown(data => {
-    sm.setState({ countdown: data });
+    updateCountdownDisplay(data);
   });
 
   onGameStart(() => {
     sm.setState(s => ({
       ...s,
-      routePermission: { ...s.routePermission, play: true },
-      countdown: null
+      routePermission: { ...s.routePermission, play: true }
     }));
     playEntrySound();
     window.location.hash = '#play';
   });
 
-  // Initialize chat
+  // Initialize chat once
   setTimeout(() => {
     const chatRoot = document.getElementById('chat-root');
     if (chatRoot) import('./chat.js').then(mod => mod.initChat('#chat-root', 'lobby'));
   }, 0);
 
   const state = sm.getState();
+
 
   // Render lobby DOM
   return el('div', {

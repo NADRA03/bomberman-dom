@@ -5,6 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import cookie from 'cookie';
 import os from 'os';
+import { count } from 'console';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -411,11 +412,20 @@ wss.on('connection', (ws, req) => {
             takenSpawns.delete(id);
             delete users[id];
             broadcast('player-disconnect', { id });
+            const anyPlaying = Object.values(users).some(u => u.x !== null && u.y !== null);
             const count = Object.keys(users).length;
-            if (count < 2) {
+
+            if (!anyPlaying) {
                 clearInterval(countdownInterval);
                 countdownInterval = null;
-                broadcast('countdown', { mode: null, seconds: 0 });
+
+                if (count >= 2 && count <= 3) {
+                    startCountdown('wait', 20);
+                } else if (count === 4) {
+                    startCountdown('ready', 10);
+                } else {
+                    broadcast('countdown', { mode: null, seconds: 0 });
+                }
             }
         }
 
