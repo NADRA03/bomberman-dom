@@ -56,7 +56,7 @@ const state = new StateManager({
     powerups: [],
     collectedPowerups: [],
 
-    stats: { maxBombs: 1, flameRange: 1, moveIntervalMs: 250, speedLevel: 0 },
+    stats: { maxBombs: 1, flameRange: 1, moveIntervalMs: 120, speedLevel: 0 },
 
     gameTimeLeft: 180 //////////////////developer
 });

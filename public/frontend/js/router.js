@@ -1,5 +1,5 @@
 import { StateManager, Router, ViewRenderer } from './mini-framework.js';
-import { sendUsername, onUserListUpdate, getClientId } from './wsConnect.js';
+import { sendUsername, onUserListUpdate, getClientId, onCountdown, onGameStart } from './wsConnect.js';
 import { onPlayerDisconnect, socket } from './wsConnect.js';
 
 const app = document.createElement('div');
@@ -15,7 +15,7 @@ const stateManager = new StateManager({
   userRegistered: false,
   routePermission: {
     lobby: false,
-    play: false
+    play: true
   }
 });
 
@@ -28,8 +28,8 @@ const renderApp = (state, el) => {
 
   // --- Route guard: redirect to root if not registered ---
   if (!state.userRegistered && path !== '') {
-    window.location.hash = '#';   // go to root
-    return renderNameForm(stateManager, el);
+    // window.location.hash = '#';   
+    // return renderNameForm(stateManager, el);
   }
 
   if (path === '') return renderNameForm(stateManager, el);
@@ -235,35 +235,32 @@ el('style', {}, `
   );
 }
 
-
-
 export function renderLobby(sm, el) {
-  let waitTimer = null;
-  let readyTimer = null;
-
-  function clearTimers() {
-    if (waitTimer) { clearInterval(waitTimer); waitTimer = null; }
-    if (readyTimer) { clearInterval(readyTimer); readyTimer = null; }
-  }
-
   // Update countdown display
   function updateCountdownDisplay() {
     const countdown = sm.getState().countdown;
-    const el = document.getElementById('countdown-text');
-    if (!el) return;
-    if (!countdown) el.textContent = '';
-    else if (countdown.type === 'wait') el.textContent = `Waiting for more players... ${countdown.seconds}...`;
-    else el.textContent = `Get ready! ${countdown.seconds}...`;
+    const countdownEl = document.getElementById('countdown-text');
+    if (!countdownEl) return;
+
+    countdownEl.textContent = countdown
+      ? `${countdown.type === 'mode' ? 'Waiting for more players...' : 'Get ready!'} ${countdown.seconds}`
+      : '';
   }
 
-  // Update user counter and list
+  // Update user counter
   function updateUserCounter() {
     const users = sm.getState().users || [];
     const counterEl = document.getElementById('user-counter');
     if (counterEl) counterEl.textContent = `Players connected: ${users.length}`;
+  }
 
+  // Update user list efficiently
+  function updateUserList() {
+    const users = sm.getState().users || [];
     const ul = document.getElementById('user-list');
-    if (ul) {
+    if (!ul) return;
+
+    if (ul.children.length !== users.length) {
       ul.innerHTML = '';
       users.forEach(u => {
         const li = document.createElement('li');
@@ -293,86 +290,36 @@ export function renderLobby(sm, el) {
   sm.subscribe(() => {
     updateCountdownDisplay();
     updateUserCounter();
+    updateUserList();
   });
 
-function startWaitCountdown() {
-  clearTimers();
-  sm.setState({ countdown: { type: 'wait', seconds: 20 } });
-  updateCountdownDisplay(); // <- force update immediately
-
-  waitTimer = setInterval(() => {
-    sm.setState(s => {
-      const seconds = s.countdown.seconds - 1;
-      if (seconds <= 0) {
-        clearInterval(waitTimer);
-        waitTimer = null;
-        startReadyCountdown();
-        return { countdown: { type: 'ready', seconds: 10 } };
-      }
-      return { countdown: { ...s.countdown, seconds } };
-    });
-  }, 1000);
-}
-
-
-function startReadyCountdown(forceRestart = false) {
-    const countdown = sm.getState().countdown;
-    if (countdown?.type === 'ready' && !forceRestart) return;
-
-    clearTimers();
-    sm.setState({ countdown: { type: 'ready', seconds: 10 } });
-
-    readyTimer = setInterval(() => {
-      sm.setState(s => {
-        const seconds = s.countdown.seconds - 1;
-        if (seconds <= 0) {
-          clearInterval(readyTimer);
-          readyTimer = null;
-          sm.setState(s => ({
-            ...s,
-            routePermission: { ...s.routePermission, play: true },
-            countdown: null
-          }));
-          playEntrySound();
-          window.location.hash = '#play';
-          return { countdown: null };
-        }
-        return { countdown: { ...s.countdown, seconds } };
-      });
-    }, 1000);
+  // Helper to refresh active users
+  function refreshUserList(users) {
+    const activeUsers = users.filter(u => !u.disconnected);
+    sm.setState({ users: activeUsers });
   }
-
-function refreshUserList(users) {
-  const activeUsers = users.filter(u => !u.disconnected);
-  sm.setState({ users: activeUsers });
-
-  // If less than 2, clear timers
-  if (activeUsers.length < 2) {
-    clearTimers();
-    sm.setState({ countdown: null });
-    return;
-  }
-
-  // 4 players? start ready countdown
-  if (activeUsers.length === 4) {
-    startReadyCountdown(); // will reset and start ready timer
-    updateCountdownDisplay(); // force immediate update
-    return;
-  }
-
-  // 2-3 players? start wait countdown
-  if (activeUsers.length >= 2 && activeUsers.length < 4) {
-    startWaitCountdown(); // will reset and start wait timer
-    updateCountdownDisplay(); // force immediate update
-  }
-}
 
   // Socket events
   onUserListUpdate(refreshUserList);
+
   onPlayerDisconnect(id => {
     const updatedUsers = (sm.getState().users || []).filter(u => u.id !== id);
     sm.setState({ users: updatedUsers });
     refreshUserList(updatedUsers);
+  });
+
+  onCountdown(data => {
+    sm.setState({ countdown: data });
+  });
+
+  onGameStart(() => {
+    sm.setState(s => ({
+      ...s,
+      routePermission: { ...s.routePermission, play: true },
+      countdown: null
+    }));
+    playEntrySound();
+    window.location.hash = '#play';
   });
 
   // Initialize chat
@@ -381,18 +328,14 @@ function refreshUserList(users) {
     if (chatRoot) import('./chat.js').then(mod => mod.initChat('#chat-root', 'lobby'));
   }, 0);
 
-  // Start countdown if 2+ players already connected
-  if ((sm.getState().users || []).length >= 2 && !sm.getState().countdown) {
-    startWaitCountdown();
-  }
-
   const state = sm.getState();
 
+  // Render lobby DOM
   return el('div', {
     className: 'page-wrapper',
     style: { display: 'flex', width: '100%', maxWidth: '1200px', margin: '0 auto', height: '100vh', position: 'relative' }
   },
-      el('style', {}, `
+    el('style', {}, `
       @media (max-width: 768px) {
         .lobby-content { flex: none !important; margin: 0 !important; width: 100% !important; height: auto !important; padding: 20px !important; display: flex !important; flex-direction: column !important; align-items: center !important; justify-content: center !important; }
         .page-wrapper { flex-direction: column !important; align-items: center !important; justify-content: flex-start !important; }
@@ -417,12 +360,13 @@ function refreshUserList(users) {
             el('span', {}, `${u.name} (${u.status})`)
           )
         )),
-        el('p', { id: 'countdown-text' }, state.countdown ? `${state.countdown.type === 'wait' ? 'Waiting...' : 'Get ready!'} ${state.countdown.seconds}` : '')
+        el('p', { id: 'countdown-text' }, state.countdown ? `${state.countdown.type === 'mode' ? 'Waiting for more players...' : 'Get ready!'} ${state.countdown.seconds}` : '')
       )
     ),
     el('aside', { id: 'chat-root', className: 'chat-container', style: { flex: 1, padding: '10px', color: '#fff', display: 'flex', flexDirection: 'column', justifyContent: 'center', height: '100vh', boxSizing: 'border-box' } })
   );
 }
+
 
 
 function renderPlay(sm, el, router) {
@@ -472,16 +416,24 @@ el('style', {}, `
 @media (max-width: 768px) {
   .page-wrapper {
     flex-direction: column !important;
-    align-items: flex-start !important;   /* children align to left */
+    align-items: flex-start !important;   
     justify-content: flex-start !important;
     max-width: 100% !important;
-    padding: 0 10px !important;           /* optional side padding */
-  }
+    padding: 0 10px !important;  
+    /* Scrollable without visible scrollbar */
+    overflow: auto;             /* enable scrolling */
+    -ms-overflow-style: none;   /* IE and Edge */
+    scrollbar-width: none;      /* Firefox */
+}
+
+.page-wrapper::-webkit-scrollbar {
+  display: none;              /* Chrome, Safari, Opera */
+}
 
   #game-root {
     background-color: transparent;
     margin: 0 !important; /* no auto centering */
-    top: 10%;
+    top: 15%;
     min-width: auto !important;
     min-height: 250px !important;
     transform: scale(0.5);
@@ -489,13 +441,15 @@ el('style', {}, `
     overflow: visible !important;
     order: 1;
     flex: none !important;
+    transform: scale(0.65);               /* smaller screen scaling */
+    min-height: 200px !important;
   }
 
 .chat-container {
   width: 90% !important;
-  height: 80% !important;
+  height: 100% !important;
   max-width: 350px !important;
-  margin: 65% auto 0 auto !important;  /* top spacing + center horizontally */
+  margin: 70% auto 0 auto !important;  /* top spacing + center horizontally */
   order: 2;
   flex: none !important;
 }

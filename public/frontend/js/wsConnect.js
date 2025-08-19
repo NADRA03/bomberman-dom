@@ -16,6 +16,8 @@ let bombCallback = () => { };
 let powerupSpawnCallback = () => { };
 let powerupPickedCallback = () => { };
 let chatCallback = null;
+let countdownCallback = null;
+let gameStartCallback = null;
 
 // --- Updated for multiple disconnect callbacks ---
 const disconnectCallbacks = [];
@@ -78,6 +80,14 @@ socket.addEventListener('message', event => {
             if (chatCallback) chatCallback(data);
             break;
 
+        case 'countdown':
+            if (countdownCallback) countdownCallback(data);
+            break;
+
+        case 'game-start':
+            if (gameStartCallback) gameStartCallback();
+            break;
+
         case 'error':
             console.error('[WS] Error:', data.message);
             alert(data.message);
@@ -129,6 +139,8 @@ export function onPlayerDisconnect(callback) {
 export function onChatMessage(callback) { chatCallback = callback; }
 export function onPowerupSpawn(callback) { powerupSpawnCallback = callback; }
 export function onPowerupPicked(callback) { powerupPickedCallback = callback; }
+export function onCountdown(callback) { countdownCallback = callback; }
+export function onGameStart(callback) { gameStartCallback = callback; }
 
 // === Utility ===
 export const getClientId = () => clientId;

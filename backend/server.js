@@ -30,12 +30,41 @@ const spawnPoints = [
 const availableColors = ['blue', 'brown', 'grey', 'yellow'];
 
 let gameActive = false;
+let countdownInterval = null;
 
 function createPowerup({ type, x, y }) {
     const id = String(nextPowerupId++);
     const pu = { id, type, x, y };
     powerups.set(id, pu);
     return pu;
+}
+
+// ---------------- COUNTDOWN HANDLER ----------------
+function startCountdown(mode, seconds) {
+    clearInterval(countdownInterval);
+    let remaining = seconds;
+
+    broadcast('countdown', { mode, seconds: remaining });
+
+    countdownInterval = setInterval(() => {
+        remaining -= 1;
+
+        if (remaining <= 0) {
+            clearInterval(countdownInterval);
+            broadcast('countdown', { mode: null, seconds: 0 });
+
+            if (mode === 'ready') {
+                // Start the game
+                broadcast('game-start', {});
+                gameActive = true;
+            } else if (mode === 'wait') {
+                // After wait, go to ready
+                startCountdown('ready', 10);
+            }
+        } else {
+            broadcast('countdown', { mode, seconds: remaining });
+        }
+    }, 1000);
 }
 
 function getAvailableColor() {
@@ -150,7 +179,7 @@ wss.on('connection', (ws, req) => {
         return;
     }
 
-    ws.send(JSON.stringify({ type: 'map-data', grid: mapData }));
+    console.log("here")
 
     ws.on('message', (msg) => {
         let data;
@@ -163,7 +192,13 @@ wss.on('connection', (ws, req) => {
 
         // --- Handle messages (same as before) ---
         if (data.type === 'request-map') {
-            ws.send(JSON.stringify({ type: 'map-data', grid: mapData }));
+                const newMap = generateMapData(mapWidth, mapHeight);
+                mapData.length = 0;
+                newMap.forEach(row => mapData.push(row));
+                powerups.clear();
+                takenSpawns.clear(); 
+                gameActive = true;
+                broadcast('map-data', { grid: mapData });
         }
 
         if (data.type === 'check-join') {
@@ -202,6 +237,13 @@ wss.on('connection', (ws, req) => {
                     color: u.color
                 }))
             });
+
+            const count = Object.keys(users).length;
+            if (count === 2 || count === 3) {
+                startCountdown('wait', 20);
+            } else if (count === 4) {
+                startCountdown('ready', 10);
+            }
         }
 
         if (data.type === 'start-game') {
@@ -369,6 +411,12 @@ wss.on('connection', (ws, req) => {
             takenSpawns.delete(id);
             delete users[id];
             broadcast('player-disconnect', { id });
+            const count = Object.keys(users).length;
+            if (count < 2) {
+                clearInterval(countdownInterval);
+                countdownInterval = null;
+                broadcast('countdown', { mode: null, seconds: 0 });
+            }
         }
 
         if (Object.keys(users).length === 0) {
