@@ -21,12 +21,13 @@ const stateManager = new StateManager({
 
 const view = new ViewRenderer('#app');
 
+// ---------------- ROUTER ----------------
 const renderApp = (state, el) => {
+
   const path = window.location.hash.slice(1) || '';
 
   console.log('Current route:', path, 'User registered:', state.userRegistered);
 
-  // --- Route guard: redirect to root if not registered ---
   if (!state.userRegistered && path !== '') {
     window.location.hash = '#';   
     return renderNameForm(stateManager, el);
@@ -55,8 +56,9 @@ const router = new Router();
 router.handleRoute();
 window.addEventListener('hashchange', () => router.handleRoute());
 
+// ---------------- HOME ----------------
 function renderNameForm(sm, el) {
-
+  
   return el('div', {
     style: {
       position: 'relative',
@@ -71,7 +73,6 @@ function renderNameForm(sm, el) {
     }
   },
 
-    // Mobile responsiveness styles
 el('style', {}, `
   @media (max-width: 768px) {
     /* Container */
@@ -154,78 +155,77 @@ el('style', {}, `
       }
     },
 
-      el('img', {
-        class: 'name-form-logo',
-        src: './frontend/img/view.gif',
-        alt: 'Logo',
-        style: {
-          width: '150px',
-          height: 'auto',
-        }
-      }),
-      el('h1', {}, 'Enter Your Name'),
+    el('img', {
+      class: 'name-form-logo',
+      src: './frontend/img/view.gif',
+      alt: 'Logo',
+      style: {
+        width: '150px',
+        height: 'auto',
+      }
+    }),
+    
+    el('h1', {}, 'Enter Your Name'),
 
-      el('div', {
-        class: 'name-form-input-row',
-        style: {
-          display: 'flex',
-          flexDirection: 'row',
-          gap: '1rem',
-          alignItems: 'center',
-        }
-      },
-        el('input', {
-          id: 'player-name',
-          placeholder: 'Your name',
-          bind: 'playerName',
-          style: {
-            padding: '0.5rem',
-            fontSize: '1rem',
-            textAlign: 'center',
-            minWidth: '200px',
-            backgroundColor: 'rgba(0,0,0,0.5)',
-            color: '#fff',
-            border: '2px solid #fff',
-            borderRadius: '0',
-            imageRendering: 'pixelated',
+    el('div', {
+      class: 'name-form-input-row',
+      style: {
+        display: 'flex',
+        flexDirection: 'row',
+        gap: '1rem',
+        alignItems: 'center',
+      }
+    },
+
+    el('input', {
+      id: 'player-name',
+      placeholder: 'Your name',
+      bind: 'playerName',
+      style: {
+        padding: '0.5rem',
+        fontSize: '1rem',
+        textAlign: 'center',
+        minWidth: '200px',
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        color: '#fff',
+        border: '2px solid #fff',
+        borderRadius: '0',
+        imageRendering: 'pixelated',
+      }
+    }),
+
+    el('button', {
+      onclick: () => {
+        const name = sm.getState().playerName.trim() || 'Player';
+        const id = getClientId();
+
+        const entrySound = new Audio('../sound/intro.wav');
+        entrySound.volume = 0.5;
+        entrySound.play().catch(e => console.log('Audio play failed:', e));
+
+        socket.send(JSON.stringify({ type: 'check-join' }));
+
+        const handleServer = (event) => {
+          const data = JSON.parse(event.data);
+
+          if (data.type === 'check-join-response') {
+            if (!data.allowed) {
+              alert(data.message || 'Game in progress. Please wait.');
+            } else {
+              socket.send(JSON.stringify({ type: 'new-user', id, name }));
+              sm.setState({
+                playerName: name,
+                routePermission: { lobby: true, play: false },
+                userRegistered: true
+              });
+              localStorage.setItem('playerName', name);
+              window.location.hash = '#lobby';
+            }
+            socket.removeEventListener('message', handleServer);
           }
-        }),
-        el('button', {
-          onclick: () => {
-            const name = sm.getState().playerName.trim() || 'Player';
-            const id = getClientId();
-
-            const entrySound = new Audio('../sound/intro.wav');
-            entrySound.volume = 0.5;
-            entrySound.play().catch(e => console.log('Audio play failed:', e));
-
-            // Step 1: Ask server if joining is allowed
-            socket.send(JSON.stringify({ type: 'check-join' }));
-
-            const handleServer = (event) => {
-              const data = JSON.parse(event.data);
-
-              if (data.type === 'check-join-response') {
-                if (!data.allowed) {
-                  alert(data.message || 'Game in progress. Please wait.');
-                } else {
-                  // Step 2: Register user only if allowed
-                  socket.send(JSON.stringify({ type: 'new-user', id, name }));
-                  sm.setState({
-                    playerName: name,
-                    routePermission: { lobby: true, play: false },
-                    userRegistered: true
-                  });
-                  localStorage.setItem('playerName', name);
-                  window.location.hash = '#lobby';
-                }
-
-                socket.removeEventListener('message', handleServer);
-              }
-            };
-
-            socket.addEventListener('message', handleServer);
-          },
+        };
+        socket.addEventListener('message', handleServer);
+      },
           style: {
             padding: '0.5rem 1rem',
             fontSize: '1rem',
@@ -237,8 +237,9 @@ el('style', {}, `
   );
 }
 
+// ---------------- LOBBY ----------------
 export function renderLobby(sm, el) {
-  // Update countdown display directly
+
   function updateCountdownDisplay(countdown) {
     const countdownEl = document.getElementById('countdown-text');
     if (!countdownEl) return;
@@ -248,14 +249,12 @@ export function renderLobby(sm, el) {
       : '';
   }
 
-  // Update user counter
   function updateUserCounter() {
     const users = sm.getState().users || [];
     const counterEl = document.getElementById('user-counter');
     if (counterEl) counterEl.textContent = `Players connected: ${users.length}`;
   }
 
-  // Update user list efficiently
   function updateUserList() {
     const users = sm.getState().users || [];
     const ul = document.getElementById('user-list');
@@ -287,19 +286,16 @@ export function renderLobby(sm, el) {
     }
   }
 
-  // Subscribe to state changes for users only (no countdown)
   sm.subscribe(() => {
     updateUserCounter();
     updateUserList();
   });
 
-  // Helper to refresh active users
   function refreshUserList(users) {
     const activeUsers = users.filter(u => !u.disconnected);
     sm.setState({ users: activeUsers });
   }
 
-  // Socket events
   onUserListUpdate(refreshUserList);
 
   onPlayerDisconnect(id => {
@@ -308,7 +304,6 @@ export function renderLobby(sm, el) {
     refreshUserList(updatedUsers);
   });
 
-  // Countdown now only updates the DOM directly
   onCountdown(data => {
     updateCountdownDisplay(data);
   });
@@ -322,7 +317,6 @@ export function renderLobby(sm, el) {
     window.location.hash = '#play';
   });
 
-  // Initialize chat once
   setTimeout(() => {
     const chatRoot = document.getElementById('chat-root');
     if (chatRoot) import('./chat.js').then(mod => mod.initChat('#chat-root', 'lobby'));
@@ -330,8 +324,6 @@ export function renderLobby(sm, el) {
 
   const state = sm.getState();
 
-
-  // Render lobby DOM
   return el('div', {
     className: 'page-wrapper',
     style: { display: 'flex', width: '100%', maxWidth: '1200px', margin: '0 auto', height: '100vh', position: 'relative' }
@@ -368,15 +360,13 @@ export function renderLobby(sm, el) {
   );
 }
 
-
-
+// ---------------- Game ----------------
 function renderPlay(sm, el, router) {
-  // Keep the player list in sync
+
   onUserListUpdate(users => {
     sm.setState({ users });
   });
 
-  // Disconnect handler
   onPlayerDisconnect(id => {
     const s = sm.getState();
     if (!Array.isArray(s.users)) return;
@@ -388,7 +378,6 @@ function renderPlay(sm, el, router) {
     sm.setState({ ...s, users: updatedUsers });
     console.log('Player disconnected:', id, 'Updated users:', updatedUsers);
 
-    // Check if only local player remains
     const activePlayers = updatedUsers.filter(u => !u.disconnected && u.id !== getClientId());
     if (activePlayers.length === 0) {
       blockAllInput();
@@ -397,7 +386,6 @@ function renderPlay(sm, el, router) {
     }
   });
 
-  // Load game and chat
   setTimeout(() => {
     const container = document.getElementById('game-root');
     if (container) import('./bomberman.js').then(mod => mod.startGame(container));
@@ -421,48 +409,47 @@ el('style', {}, `
     justify-content: flex-start !important;
     max-width: 100% !important;
     padding: 0 10px !important;  
-    /* Scrollable without visible scrollbar */
-    overflow: auto;             /* enable scrolling */
-    -ms-overflow-style: none;   /* IE and Edge */
-    scrollbar-width: none;      /* Firefox */
+    overflow: auto;           
+    -ms-overflow-style: none;   
+    scrollbar-width: none;     
 }
 
 .page-wrapper::-webkit-scrollbar {
-  display: none;              /* Chrome, Safari, Opera */
+  display: none;             
 }
 
-  #game-root {
-    background-color: transparent;
-    margin: 0 !important; /* no auto centering */
-    top: 15%;
-    min-width: auto !important;
-    min-height: 250px !important;
-    transform: scale(0.5);
-    transform-origin: top left;           /* start from left */
-    overflow: visible !important;
-    order: 1;
-    flex: none !important;
-    transform: scale(0.65);               /* smaller screen scaling */
-    min-height: 200px !important;
-  }
+#game-root {
+  background-color: transparent;
+  margin: 0 !important; 
+  top: 15%;
+  min-width: auto !important;
+  min-height: 250px !important;
+  transform: scale(0.5);
+  transform-origin: top left;          
+  overflow: visible !important;
+  order: 1;
+  flex: none !important;
+  transform: scale(0.65);              
+  min-height: 200px !important;
+}
 
 .chat-container {
   width: 90% !important;
   height: 100% !important;
   max-width: 350px !important;
-  margin: 70% auto 0 auto !important;  /* top spacing + center horizontally */
+  margin: 70% auto 0 auto !important;  
   order: 2;
   flex: none !important;
 }
 
-  aside {
-    display: none !important;             /* hide player list on mobile */
+aside {
+    display: none !important;             
   }
 }
 
 @media (max-width: 480px) {
   #game-root {
-    transform: scale(0.65);               /* smaller screen scaling */
+    transform: scale(0.65);              
     min-height: 200px !important;
   }
 }
@@ -539,19 +526,17 @@ el('style', {}, `
     })
   );
 
-  // --- Toast helper ---
+// ---------------- TOAST ----------------
 function showWinToast() {
   const existing = document.getElementById('win-toast');
   if (existing) return;
 
-
-  // Hide the game container
   setTimeout(() => {
     const gameRoot = document.getElementById('game-root');
     if (gameRoot) gameRoot.style.display = 'none';
   }, 50);
 
-  const toastSize = '300px'; // square size
+  const toastSize = '300px'; 
 
   const toast = el('div', {
     id: 'win-toast',
@@ -617,16 +602,15 @@ function showWinToast() {
 }
 
 
-  // --- Disconnect the player from the server ---
-  function disconnectPlayer() {
+// ---------------- HELPERS ----------------
+function disconnectPlayer() {
     if (socket && socket.readyState === WebSocket.OPEN) {
       socket.close();
       console.log('Player disconnected from server after winning');
     }
-  }
+}
 
-  // --- Block all input using overlay ---
-  function blockAllInput() {
+function blockAllInput() {
     const overlay = document.createElement('div');
     overlay.id = 'input-blocker';
     Object.assign(overlay.style, {
@@ -635,16 +619,14 @@ function showWinToast() {
       left: 0,
       width: '100vw',
       height: '100vh',
-      zIndex: 9998, // below toast
+      zIndex: 9998, 
       backgroundColor: 'transparent',
     });
 
-    // Block mouse/touch events
     ['click','mousedown','mouseup','touchstart','touchend'].forEach(evt => {
       overlay.addEventListener(evt, e => e.stopPropagation(), true);
     });
 
-    // Block keyboard events
     overlay.tabIndex = 0;
     ['keydown','keyup','keypress'].forEach(evt => {
       overlay.addEventListener(evt, e => e.stopPropagation(), true);
@@ -661,11 +643,9 @@ function renderNotFound(el) {
   );
 }
 
-
 let entrySound;
-
 function playEntrySound() {
-  // Stop previous sound if exists
+
   if (entrySound) {
     entrySound.pause();
     entrySound.currentTime = 0;
@@ -673,19 +653,17 @@ function playEntrySound() {
 
   entrySound = new Audio('../sound/game.mp3');
   entrySound.volume = 0.5;
-  entrySound.loop = true; // <-- Loop continuously
+  entrySound.loop = true; 
 
   entrySound.play().catch(e => console.log('Audio play failed:', e));
 }
 
-// Stop the sound when navigating back to home
 function stopEntrySound() {
   if (entrySound) {
     entrySound.pause();
     entrySound.currentTime = 0;
   }
 }
-
 
 window.addEventListener('hashchange', () => {
   const path = window.location.hash.slice(1) || '';

@@ -33,6 +33,9 @@ const availableColors = ['blue', 'brown', 'grey', 'yellow'];
 let gameActive = false;
 let countdownInterval = null;
 
+
+
+
 function createPowerup({ type, x, y }) {
     const id = String(nextPowerupId++);
     const pu = { id, type, x, y };
@@ -40,7 +43,9 @@ function createPowerup({ type, x, y }) {
     return pu;
 }
 
-// ---------------- COUNTDOWN HANDLER ----------------
+
+
+
 function startCountdown(mode, seconds) {
     clearInterval(countdownInterval);
     let remaining = seconds;
@@ -55,11 +60,9 @@ function startCountdown(mode, seconds) {
             broadcast('countdown', { mode: null, seconds: 0 });
 
             if (mode === 'ready') {
-                // Start the game
                 broadcast('game-start', {});
                 gameActive = true;
             } else if (mode === 'wait') {
-                // After wait, go to ready
                 startCountdown('ready', 10);
             }
         } else {
@@ -68,10 +71,16 @@ function startCountdown(mode, seconds) {
     }, 1000);
 }
 
+
+
+
 function getAvailableColor() {
     const taken = new Set(Object.values(users).map(u => u.color));
     return availableColors.find(c => !taken.has(c)) || 'blue';
 }
+
+
+
 
 function generateMapData(width, height) {
     const grid = [];
@@ -107,6 +116,9 @@ function getAvailableSpawn() {
     );
 }
 
+
+
+
 function broadcast(type, payload) {
     const msg = JSON.stringify({ type, ...payload });
     wss.clients.forEach(client => {
@@ -115,6 +127,9 @@ function broadcast(type, payload) {
         }
     });
 }
+
+
+
 
 function explodeServerBomb(user, bx, by) {
     const dirs = [
@@ -145,12 +160,18 @@ function explodeServerBomb(user, bx, by) {
     }
 }
 
+
+
+
 function maybeDestroyAndSpawn(x, y) {
     if (mapData[y][x] === 1) {
         mapData[y][x] = 0;
         maybeSpawnPowerup(x, y);
     }
 }
+
+
+
 
 function maybeSpawnPowerup(x, y) {
     const roll = Math.random();
@@ -169,6 +190,9 @@ function maybeSpawnPowerup(x, y) {
 
     broadcast('powerup-spawn', { powerup: pu });
 }
+
+
+
 
 wss.on('connection', (ws, req) => {
     const cookies = cookie.parse(req.headers.cookie || '');
@@ -251,37 +275,31 @@ wss.on('connection', (ws, req) => {
             const user = users[data.id];
             if (!user) return;
 
-            // --- REGENERATE MAP FOR NEW GAME ---
             if (!gameActive) {
                 const newMap = generateMapData(mapWidth, mapHeight);
                 mapData.length = 0;
                 newMap.forEach(row => mapData.push(row));
                 powerups.clear();
-                takenSpawns.clear(); // Reset spawn tracking
+                takenSpawns.clear(); 
                 gameActive = true;
                 broadcast('map-data', { grid: mapData });
             }
 
-            // Remove any old spawn entry for this player (fresh join)
             takenSpawns.delete(data.id);
 
-            // Get an available spawn
             const spawn = getAvailableSpawn();
             if (!spawn) {
                 ws.send(JSON.stringify({ type: 'error', message: 'Game full' }));
                 return;
             }
 
-            // Reserve spawn before telling clients
             takenSpawns.set(data.id, spawn);
 
-            // Assign spawn to player
             user.x = spawn.x;
             user.y = spawn.y;
             user.spawn = { ...spawn };
-            user.lastMoveAt = 0; // reset movement cooldown
+            user.lastMoveAt = 0; 
 
-            // Send existing players list to this player
             const others = Object.values(users)
                 .filter(u => u.id !== data.id && u.x !== null && u.y !== null)
                 .map(u => ({ id: u.id, name: u.name, x: u.x, y: u.y, color: u.color }));
@@ -293,7 +311,6 @@ wss.on('connection', (ws, req) => {
                 }));
             }
 
-            // Tell this player their spawn
             ws.send(JSON.stringify({
                 type: 'spawn-position',
                 id: data.id,
@@ -302,7 +319,6 @@ wss.on('connection', (ws, req) => {
                 color: user.color
             }));
 
-            // Tell all others about this new player
             broadcast('spawn-position', {
                 id: data.id,
                 x: spawn.x,
@@ -437,11 +453,16 @@ wss.on('connection', (ws, req) => {
     });
 });
 
+
+
+
 app.use(express.static(path.join(__dirname, '../public')));
+
+
+
 
 const PORT = 8000;
 server.listen(PORT, '0.0.0.0', () => {
-    // Log all available LAN addresses
     const interfaces = os.networkInterfaces();
     const addresses = [];
     for (const name of Object.keys(interfaces)) {

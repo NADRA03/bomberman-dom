@@ -1,5 +1,4 @@
 // NOTE: Requires your mini-framework.js (StateManager, ViewRenderer, GameLoop, NetworkManager)
-
 import {
     sendMovement,
     onOtherPlayerMove,
@@ -58,11 +57,15 @@ const state = new StateManager({
 
     stats: { maxBombs: 1, flameRange: 1, moveIntervalMs: 120, speedLevel: 0 },
 
-    gameTimeLeft: 180 //////////////////developer
+    gameTimeLeft: 180 
 });
 
 const view = new ViewRenderer('#game-root');
 
+
+
+
+// ---------------- START ----------------
 export function startGame(container) {
     state.setState({ container });
     requestMap();
@@ -90,19 +93,6 @@ export function startGame(container) {
         drawWalls();
         drawHearts();
         drawTimer();
-
-        // const spawnX = 1;
-        // const spawnY = 1;
-        // if (grid[spawnY][spawnX] !== 0) {
-        //     console.warn('Spawn blocked, clearing cell...');
-        //     grid[spawnY][spawnX] = 0;
-        // }
-
-        // state.setState(s => ({
-        //     ...s,
-        //     bomber: { ...s.bomber, x: spawnX, y: spawnY }
-        // }));
-
         sendStartGame();
         update();
     });
@@ -209,7 +199,6 @@ onPowerupPicked(({ id, by, type, newMaxBombs, newFlameRange, newMoveIntervalMs, 
     }
 
     if (by === getClientId()) {
-        // Update stats as before
         if (type === 'bombs' && newMaxBombs != null) {
             state.setState({ stats: { ...s.stats, maxBombs: newMaxBombs } });
         }
@@ -220,7 +209,6 @@ onPowerupPicked(({ id, by, type, newMaxBombs, newFlameRange, newMoveIntervalMs, 
             state.setState({ stats: { ...s.stats, moveIntervalMs: newMoveIntervalMs, speedLevel: newSpeedLevel ?? s.stats.speedLevel } });
         }
 
-        // Make sure powerupContainer exists before appending icon
         if (s.powerupContainer && !s.collectedPowerups.includes(type)) {
             const iconByType = {
                 bombs: 'frontend/img/bombPlusOne.png',
@@ -235,7 +223,6 @@ onPowerupPicked(({ id, by, type, newMaxBombs, newFlameRange, newMoveIntervalMs, 
 
             s.powerupContainer.appendChild(icon);
 
-            // Update collectedPowerups immutably
             const newCollected = [...s.collectedPowerups, type];
             state.setState({ collectedPowerups: newCollected });
         }
@@ -252,25 +239,30 @@ onPowerupPicked(({ id, by, type, newMaxBombs, newFlameRange, newMoveIntervalMs, 
     }
 });
 
-
-    const loop = new GameLoop(() => {
-        stepMovement();
-        update();
-    }, () => { }, 60);
+const loop = new GameLoop(() => {
+    stepMovement();
+    update();
+}, () => { }, 60);
 
     loop.start();
     startGameTimer();
 }
 
+
+
+
 function spritePath(color, pose) {
     return `frontend/img/${color}/${pose}.png`;
 }
 
+
+
+
+// ---------------- TOP DIV ----------------
 function drawHearts() {
     const s = state.getState();
     if (s.heartContainer) s.heartContainer.remove();
 
-    // Hearts + powerups container (center top)
     const container = view.el('div', {
         style: {
             position: 'fixed',
@@ -281,7 +273,7 @@ function drawHearts() {
             gap: '10px',
             alignItems: 'center',
             zIndex: 1000,
-            pointerEvents: 'none', // allow clicks to pass through except button
+            pointerEvents: 'none', 
         }
     });
 
@@ -312,13 +304,12 @@ function drawHearts() {
     document.body.appendChild(container);
     state.setState({ heartContainer: container });
 
-    // Leave button at top-left
     let leaveBtn = document.getElementById('leave-btn');
     if (!leaveBtn) {
         leaveBtn = view.el('button', {
             id: 'leave-btn',
             onclick: () => {
-                window.location.href = '/'; // go back to home
+                window.location.href = '/'; 
             },
             style: {
                 position: 'fixed',
@@ -334,6 +325,9 @@ function drawHearts() {
 }
 
 
+
+
+// ---------------- TIMER ----------------
 function drawTimer() {
     const s = state.getState();
     let timerEl = document.getElementById('game-timer');
@@ -373,6 +367,9 @@ function startGameTimer() {
 }
 
 
+
+
+// ---------------- TIMES UP ----------------
 function endGame() {
     showToast("Time's up! Game over.", 3000);
     setTimeout(() => {
@@ -422,6 +419,10 @@ function update() {
     }
 }
 
+
+
+
+// ---------------- REMOTE PLAYERS ----------------
 function renderRemotePlayer({ id, x, y, color = 'blue' }) {
     if (id === getClientId()) return;
 
@@ -481,6 +482,10 @@ function renderRemotePlayer({ id, x, y, color = 'blue' }) {
     }
 }
 
+
+
+
+// ---------------- MAP ----------------
 function drawWalls() {
     const { grid, gridSize, images, container } = state.getState();
     document.querySelectorAll('.tile').forEach(el => el.remove());
@@ -506,6 +511,10 @@ function drawWalls() {
     });
 }
 
+
+
+
+// ---------------- BOMB ----------------
 function placeBomb() {
     const s = state.getState();
     const { bomber } = s;
@@ -550,14 +559,13 @@ function explodeBomb(bomb) {
                 el.style.backgroundImage = `url('frontend/img/${color}/hit.png')`;
             }
 
-            // Delay before respawn or game over so hit image shows
             setTimeout(() => {
                 if (newLives <= 0) {
                     handleGameOver();
                 } else {
                     sendRespawn();
                 }
-            }, 500); // 500ms delay for hit animation
+            }, 500); 
         }
 
         setTimeout(() => {
@@ -598,6 +606,10 @@ function explodeBomb(bomb) {
     });
 }
 
+
+
+
+// ---------------- POWER UP ----------------
 function tryPickupPowerup() {
     const s = state.getState();
     const { bomber, powerups } = s;
@@ -607,6 +619,10 @@ function tryPickupPowerup() {
     sendPickupPowerup(pu.id);
 }
 
+
+
+
+// ---------------- EVENT LISTENERS ----------------
 document.addEventListener('keydown', e => {
     if (e.repeat) return;
     if (e.key === 'ArrowUp') { keysDown.up = true; movedThisPress.up = false; holdStartAt.up = performance.now(); }
@@ -645,34 +661,33 @@ function stepMovement() {
     else if (keysDown.down && !movedThisPress.down) { dir = 'down'; dy = 1; bomber.direction = 'down'; }
     else if (keysDown.left && !movedThisPress.left) { dir = 'left'; dx = -1; bomber.direction = 'left'; }
     else if (keysDown.right && !movedThisPress.right) { dir = 'right'; dx = 1; bomber.direction = 'right'; }
-    else return; // No new press, no move
+    else return; 
 
-    // Calculate next position
     const nextX = bomber.x + dx;
     const nextY = bomber.y + dy;
 
-    // Bounds check
     if (nextX < 0 || nextX >= mapWidth || nextY < 0 || nextY >= mapHeight) return;
 
-    // Collision check
     const cell = grid[nextY][nextX];
     if (cell === 1 || cell === 2) return;
 
-    // Move player
     bomber.x = nextX;
     bomber.y = nextY;
 
-    movedThisPress[dir] = true; // Mark as moved for this key press
+    movedThisPress[dir] = true; 
 
     update();
     sendMovement(nextX, nextY);
     tryPickupPowerup();
 }
 
+
+
+
+// ---------------- TOAST ----------------
 let activeToast = null;
 
 export function showToast(message, duration = 3000) {
-    // Overlay (create once)
     let overlay = document.getElementById('toast-overlay');
     if (!overlay) {
         overlay = document.createElement('div');
@@ -688,7 +703,6 @@ export function showToast(message, duration = 3000) {
             pointerEvents: 'auto',
         });
 
-        // Block pointer & keyboard events
         ['click','mousedown','mouseup','touchstart','touchend','keydown','keyup','keypress']
             .forEach(evt => overlay.addEventListener(evt, e => e.stopPropagation(), true));
 
@@ -697,7 +711,6 @@ export function showToast(message, duration = 3000) {
         overlay.focus();
     }
 
-    // Toast container (create once)
     let toastContainer = document.getElementById('toast-container');
     if (!toastContainer) {
         toastContainer = document.createElement('div');
@@ -716,13 +729,11 @@ export function showToast(message, duration = 3000) {
         document.body.appendChild(toastContainer);
     }
 
-    // Remove existing toast immediately if any
     if (activeToast) {
         activeToast.remove();
         activeToast = null;
     }
 
-    // Create new toast
     const toast = document.createElement('div');
     toast.textContent = message;
     Object.assign(toast.style, {
@@ -739,10 +750,8 @@ export function showToast(message, duration = 3000) {
     toastContainer.appendChild(toast);
     activeToast = toast;
 
-    // Fade in
     requestAnimationFrame(() => toast.style.opacity = '1');
 
-    // Fade out after duration
     setTimeout(() => {
         toast.style.opacity = '0';
         toast.addEventListener('transitionend', () => {
@@ -755,6 +764,9 @@ export function showToast(message, duration = 3000) {
 }
 
 
+
+
+// ---------------- DIED ----------------
 function handleGameOver() {
     showToast("Game Over! You ran out of lives.", 4000);
 

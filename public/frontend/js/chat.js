@@ -9,6 +9,9 @@ const chatState = new StateManager({
 let view = null;
 let room = null;
 
+
+
+
 export function initChat(containerSelector, roomName) {
   onChatMessage(({ room: msgRoom, from, text, id }) => {
     if (msgRoom !== room) return;
@@ -24,6 +27,10 @@ export function initChat(containerSelector, roomName) {
   view.mount(chatState, renderChatUI);
 }
 
+
+
+
+// ---------------- UI ----------------
 function renderChatUI(state, el) {
   const fireBlock = () => el('img', {
     src: './frontend/img/solid.png',
@@ -37,27 +44,20 @@ function renderChatUI(state, el) {
     }
   });
 
-  const blocksPerRow = 17;  // 17 * 24 = 408px wide
-  const blocksPerColumn = 17; // same height for better vertical fit
+  const blocksPerRow = 17;  
+  const blocksPerColumn = 17; 
+  const containerSize = blocksPerRow * 24; 
+  const innerMessagesHeight = containerSize - 24 * 2; 
+  const innerMessagesWidth = containerSize - 24 * 2;  
 
-  // Container size increased to 408 to fit exactly 17 blocks * 24px
-  const containerSize = blocksPerRow * 24; // 408
-
-  // Inner messages size reduced accordingly (2 borders of 24px each)
-  const innerMessagesHeight = containerSize - 24 * 2; // 408 - 48 = 360
-  const innerMessagesWidth = containerSize - 24 * 2;  // 360
-
-  // Top fire row
   const topFireRow = el('div', { style: { display: 'flex', gap: '0px' } },
     Array(blocksPerRow).fill(null).map((_, i) => fireBlock())
   );
 
-  // Bottom fire row
   const bottomFireRow = el('div', { style: { display: 'flex', gap: '0px' } },
     Array(blocksPerRow).fill(null).map((_, i) => fireBlock())
   );
 
-  // Left and Right fire columns
   const leftFireColumn = el('div', { style: { display: 'flex', flexDirection: 'column', gap: '0px' } },
     Array(blocksPerColumn).fill(null).map((_, i) => fireBlock())
   );
@@ -147,6 +147,8 @@ function renderChatUI(state, el) {
 
 
 
+
+// ---------------- SEND ----------------
 function sendMessage() {
   const state = chatState.getState();
   const msg = state.currentInput.trim();
