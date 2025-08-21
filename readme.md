@@ -114,7 +114,7 @@ bomberman/
 ![View 4](./readme/picture4.png)  
 ![View 5](./readme/picture5.png)  
 ![View 6](./readme/picture6.png)  
-![View 6](./readme/picture6.png)  
+![View 6](./readme/picture7.png)  
 
 
 ---
