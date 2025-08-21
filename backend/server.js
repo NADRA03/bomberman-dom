@@ -32,6 +32,8 @@ const availableColors = ['blue', 'brown', 'grey', 'yellow'];
 
 let gameActive = false;
 let countdownInterval = null;
+let gameTimer = null;
+let gameTimeLeft = 180;
 
 
 
@@ -43,8 +45,14 @@ function createPowerup({ type, x, y }) {
     return pu;
 }
 
-
-
+function broadcastToPlayers(type, payload) {
+    const msg = JSON.stringify({ type, ...payload });
+    Object.values(users).forEach(u => {
+        if (u.ws.readyState === u.ws.OPEN) {
+            u.ws.send(msg);
+        }
+    });
+}
 
 function startCountdown(mode, seconds) {
     clearInterval(countdownInterval);
@@ -59,9 +67,25 @@ function startCountdown(mode, seconds) {
             clearInterval(countdownInterval);
             broadcast('countdown', { mode: null, seconds: 0 });
 
-            if (mode === 'ready') {
-                broadcast('game-start', {});
-                gameActive = true;
+        if (mode === 'ready') {
+            broadcast('game-start', {});
+            gameActive = true;
+
+            clearInterval(gameTimer);
+            gameTimeLeft = 180; 
+            broadcastToPlayers('game-timer', { timeLeft: gameTimeLeft });
+
+            gameTimer = setInterval(() => {
+                gameTimeLeft -= 1;
+                if (gameTimeLeft <= 0) {
+                    clearInterval(gameTimer);
+                    gameActive = false;
+                    broadcastToPlayers('game-timer', { timeLeft: 0 });
+                    broadcastToPlayers('game-end', { reason: 'time-up' });
+                } else {
+                    broadcastToPlayers('game-timer', { timeLeft: gameTimeLeft });
+                }
+            }, 1000);
             } else if (mode === 'wait') {
                 startCountdown('ready', 10);
             }
@@ -381,8 +405,8 @@ wss.on('connection', (ws, req) => {
                 powerups.delete(pu.id);
                 broadcast('powerup-picked', { id: pu.id, by: u.id, powerupType: 'flames', newFlameRange: u.stats.flameRange });
             } else if (pu.type === 'speed') {
-                const current = u.stats.moveIntervalMs ?? 120;
-                const next = Math.max(30, current - 50);
+                const current = 500;
+                const next = 150;
                 u.stats.moveIntervalMs = next;
                 u.stats.speedLevel = (u.stats.speedLevel || 0) + 1;
                 powerups.delete(pu.id);

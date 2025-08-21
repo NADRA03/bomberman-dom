@@ -15,7 +15,8 @@ import {
     onPowerupSpawn,
     onPowerupPicked,
     sendPickupPowerup,
-    sendRespawn
+    sendRespawn,
+    onGameTimer
 } from './wsConnect.js';
 
 import { StateManager, ViewRenderer, GameLoop } from './mini-framework.js';
@@ -55,9 +56,9 @@ const state = new StateManager({
     powerups: [],
     collectedPowerups: [],
 
-    stats: { maxBombs: 1, flameRange: 1, moveIntervalMs: 120, speedLevel: 0 },
+    stats: { maxBombs: 1, flameRange: 1, moveIntervalMs: 500, speedLevel: 0 },
 
-    gameTimeLeft: 180 
+    gameTimeLeft: 180
 });
 
 const view = new ViewRenderer('#game-root');
@@ -351,20 +352,14 @@ function drawTimer() {
     timerEl.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
-let gameTimerInterval;
+onGameTimer(timeLeft => {
+    state.setState({ gameTimeLeft: timeLeft });
+    drawTimer();
 
-function startGameTimer() {
-    gameTimerInterval = setInterval(() => {
-        const s = state.getState();
-        if (s.gameTimeLeft <= 0) {
-            clearInterval(gameTimerInterval);  // stop timer here
-            endGame();
-            return;
-        }
-        state.setState({ gameTimeLeft: s.gameTimeLeft - 1 });
-        drawTimer();
-    }, 1000);
-}
+    if (timeLeft <= 0) {
+        endGame();
+    }
+});
 
 
 
@@ -653,35 +648,60 @@ let holdStartAt = { up: 0, down: 0, left: 0, right: 0 };
 
 function stepMovement() {
     const s = state.getState();
-    const { bomber, grid, mapWidth, mapHeight } = s;
+    const { bomber, grid, mapWidth, mapHeight, collectedPowerups, stats } = s;
 
-    let dir = null, dx = 0, dy = 0;
+    const now = performance.now();
+    const hasSpeed = collectedPowerups.includes('speed');
+    const interval = stats?.moveIntervalMs ?? 500; // default movement interval
 
-    if (keysDown.up && !movedThisPress.up) { dir = 'up'; dy = -1; bomber.direction = 'up'; }
-    else if (keysDown.down && !movedThisPress.down) { dir = 'down'; dy = 1; bomber.direction = 'down'; }
-    else if (keysDown.left && !movedThisPress.left) { dir = 'left'; dx = -1; bomber.direction = 'left'; }
-    else if (keysDown.right && !movedThisPress.right) { dir = 'right'; dx = 1; bomber.direction = 'right'; }
-    else return; 
+    const tryMove = (dir, dx, dy) => {
+        if (!keysDown[dir]) {
+            movedThisPress[dir] = false;
+            holdStartAt[dir] = 0;
+            return false;
+        }
 
-    const nextX = bomber.x + dx;
-    const nextY = bomber.y + dy;
+        if (!movedThisPress[dir] || (hasSpeed && now - holdStartAt[dir] >= interval)) {
+            const nextX = bomber.x + dx;
+            const nextY = bomber.y + dy;
+            if (nextX < 0 || nextX >= mapWidth || nextY < 0 || nextY >= mapHeight) return false;
 
-    if (nextX < 0 || nextX >= mapWidth || nextY < 0 || nextY >= mapHeight) return;
+            const cell = grid[nextY][nextX];
+            if (cell === 1 || cell === 2) return false;
 
-    const cell = grid[nextY][nextX];
-    if (cell === 1 || cell === 2) return;
+            bomber.x = nextX;
+            bomber.y = nextY;
+            bomber.direction = dir;
 
-    bomber.x = nextX;
-    bomber.y = nextY;
+            movedThisPress[dir] = true;
+            holdStartAt[dir] = now;
 
-    movedThisPress[dir] = true; 
+            sendMovement(nextX, nextY);
+            tryPickupPowerup();
+            return true;
+        }
+
+        return false;
+    };
+
+    // Try movement in priority order
+    tryMove('up', 0, -1) ||
+    tryMove('down', 0, 1) ||
+    tryMove('left', -1, 0) ||
+    tryMove('right', 1, 0);
 
     update();
-    sendMovement(nextX, nextY);
-    tryPickupPowerup();
 }
 
-
+// Reset movement immediately when picking up speed
+onPowerupPicked(({ by, type }) => {
+    if (by === getClientId() && type === 'speed') {
+        Object.keys(keysDown).forEach(dir => {
+            if (keysDown[dir]) movedThisPress[dir] = false;
+            holdStartAt[dir] = 0;
+        });
+    }
+});
 
 
 // ---------------- TOAST ----------------

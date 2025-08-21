@@ -12,12 +12,12 @@ let existingPlayersCallback = () => { };
 let otherSpawnCallback = () => { };
 let mapCallback = () => { };
 let bombCallback = () => { };
-
 let powerupSpawnCallback = () => { };
 let powerupPickedCallback = () => { };
 let chatCallback = null;
 let countdownCallback = null;
 let gameStartCallback = null;
+let gameTimerCallback = null;
 
 // --- Updated for multiple disconnect callbacks ---
 const disconnectCallbacks = [];
@@ -88,6 +88,10 @@ socket.addEventListener('message', event => {
             if (gameStartCallback) gameStartCallback();
             break;
 
+        case 'game-timer':
+            if (gameTimerCallback) gameTimerCallback(data.timeLeft);
+            break;
+
         case 'error':
             console.error('[WS] Error:', data.message);
             alert(data.message);
@@ -110,6 +114,10 @@ export function sendStartGame() {
     const payload = { type: 'start-game', id: clientId };
     const send = () => socket.send(JSON.stringify(payload));
     socket.readyState === WebSocket.OPEN ? send() : socket.addEventListener('open', send, { once: true });
+}
+
+export function onGameTimer(callback) {
+    gameTimerCallback = callback;
 }
 
 export function sendMovement(x, y) {
